@@ -17,7 +17,7 @@ function M:new() return setmetatable({}, { __index = M }) end
 
 function M:enabled()
   local ft = vim.bo.filetype
-  if ft ~= "cpp" and ft ~= "c" then return false end
+  if ft ~= "cpp" and ft ~= "c" and ft ~= "rootrepl" then return false end
   local ok, repl = pcall(require, "rslime.repl")
   return ok and repl.is_running()
 end
@@ -58,6 +58,25 @@ function M:get_completions(context, callback)
   M.complete_line(before, function(items)
     callback({ is_incomplete_forward = false, is_incomplete_backward = true, items = items })
   end)
+end
+
+---omnifunc for the rootrepl ftplugin (C-x C-o); blink users never hit this
+function M.omnifunc(findstart, base)
+  if findstart == 1 then
+    local line = vim.api.nvim_get_current_line()
+    local col = vim.fn.col(".")
+    local before = line:sub(1, col)
+    local start = before:match("[%.%->_:a-zA-Z0-9]*$") or ""
+    return col - #start
+  end
+  local items = {}
+  M.complete_line(vim.api.nvim_get_current_line():sub(1, vim.fn.col(".")), function(cands)
+    for _, c in ipairs(cands) do
+      items[#items + 1] = { word = c.label, menu = c.label_description, kind = c.kind }
+    end
+    vim.fn.complete(vim.fn.col(".") - #base, items)
+  end)
+  return ""
 end
 
 return M

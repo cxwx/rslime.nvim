@@ -19,7 +19,7 @@ end
 -- headless 默认列宽太窄会把应答行折行，加宽
 vim.o.columns = 200
 
-require("rslime").setup { prefix = nil, completion = true }
+require("rslime").setup { prefix = nil, completion = true, diagnostics = true }
 local repl = require("rslime.repl")
 local rpc = require("rslime.rpc")
 
@@ -39,6 +39,11 @@ vim.defer_fn(function()
 end, 6000)
 
 vim.defer_fn(function()
+  -- rootrepl filetype (daprepl 式) 应已由 on_buf 设置
+  local rbuf = repl.bufnr()
+  assert(rbuf and vim.bo[rbuf].filetype == "rootrepl",
+    "rootrepl ft expected, got [" .. vim.bo[rbuf].filetype .. "]")
+  say("rootrepl ft OK")
   rpc.request("  hist.Dra", function(lines)  -- 带缩进, 复现真实 cell
     local cands = rpc.parse_lines(lines)
     local names = {}
@@ -83,7 +88,61 @@ vim.defer_fn(function()
                 local okv = vim.tbl_contains(vn, "hist") and vim.tbl_contains(vn, "p")
                 say(("vars -> %d, hist=%s p=%s"):format(#vars,
                   tostring(vim.tbl_contains(vn, "hist")), tostring(vim.tbl_contains(vn, "p"))))
-                finish(ok and ok3 and #c4 >= 3 and oke and okb and okv)
+
+                -- M3: 签名 (P 类行, 含 vv 与类 doc)
+                rpc.request_cmd(function(id)
+                  return string.format('rslime_sign("%s", "%s")\n', id, rpc.escape("p->Fill"))
+                end, nil, function(sl)
+                  local sigs = {}
+                  for _, c in ipairs(rpc.parse_lines(sl)) do
+                    if c.kind == "P" then sigs[#sigs + 1] = c.name end
+                  end
+                  say(("sign p->Fill -> %d protos"):format(#sigs))
+                  for i = 1, math.min(3, #sigs) do say("  " .. sigs[i]) end
+                  local oks = #sigs >= 3 and sigs[1]:find("TH1::Fill", 1, true) ~= nil
+
+                  -- P3: 错误回标。真 buffer + 坏 cell 走 send_cell 全路径
+                  local srcbuf = vim.api.nvim_create_buf(false, true)
+                  vim.api.nvim_buf_set_lines(srcbuf, 0, -1, false, {
+                    "// %% bad cell",
+                    "nope_var_xyz.Foo();",
+                  })
+                  vim.api.nvim_set_current_buf(srcbuf)
+                  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+                  repl.send_cell()  -- capture() 等 1800ms 后回标
+                  vim.defer_fn(function()
+                    local ds = vim.diagnostic.get(srcbuf)
+                    local okd = #ds >= 1 and ds[1].lnum == 1
+                      and ds[1].message:find("nope", 1, true) ~= nil
+                    say(("diag -> %d items, first=%s"):format(#ds,
+                      #ds > 0 and ("[" .. ds[1].lnum + 1 .. "] " .. ds[1].message) or "none"))
+
+                    -- 会话重放: 清历史 -> 记一条 -> 重放 -> 活会话里验证
+                    local history = require("rslime.history")
+                    history.clear()
+                    history.record('TH1F rp("rp", "t", 100, 0, 10)')
+                    history.replay(300, function()
+                      rpc.request_cmd(function(id)
+                        return string.format('rslime_vars("%s")\n', id)
+                      end, nil, function(vl2)
+                        local vn2 = {}
+                        for _, v in ipairs(rpc.parse_lines(vl2)) do vn2[#vn2 + 1] = v.name end
+                        local okr = vim.tbl_contains(vn2, "rp")
+                        say(("replay -> rp=%s"):format(tostring(okr)))
+
+                        -- hover: 指针 p -> Dump() 数据成员
+                        require("rslime.inspect").hover_session("p", function(hl)
+                          local joined = table.concat(hl, " ")
+                          local okh = joined:find("TH1F *", 1, true) ~= nil
+                            and (joined:find("fN", 1, true) or joined:find("fEntries", 1, true)) ~= nil
+                            and #hl > 5
+                          say(("hover p -> %d lines, dump=%s"):format(#hl, tostring(okh)))
+                          finish(ok and ok3 and #c4 >= 3 and oke and okb and okv and oks and okd and okr and okh)
+                        end)
+                      end, 8000)
+                    end)
+                  end, 3500)
+                end, 8000)
               end, 8000)
             end, 8000)
           end, 8000)
@@ -93,4 +152,4 @@ vim.defer_fn(function()
   end, 12000)
 end, 10000)
 
-vim.wait(40000, function() return false end, 100)
+vim.wait(80000, function() return false end, 100)

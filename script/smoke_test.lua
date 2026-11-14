@@ -89,4 +89,27 @@ local ev = rpc.filter_eval_lines({
 }, "p.GetMean()")
 assert(#ev == 2 and ev[1] == "(double) 0.5238917" and ev[2]:find("^error:"), vim.inspect(ev))
 
+-- diag: cling 错误行解析
+local diag = require("rslime.diag")
+local errs = diag.parse_errors({
+  "input_line_13:2:10: error: use of undeclared identifier 'nope'",
+  "ROOT_prompt_8:1:2: error: member reference type 'TH1F *' is a pointer",
+  "error: something anchorless",
+  "Info in <TInterpreter>: noise",   -- 非错误
+  "(double) 0.5",                     -- 值输出
+})
+assert(#errs == 3, "expect 3 errors, got " .. #errs)
+assert(errs[1].line == 2 and errs[1].col == 10 and errs[1].message:find("nope", 1, true))
+assert(errs[2].line == 1 and errs[2].col == 2)
+assert(errs[3].line == 1 and errs[3].message == "something anchorless")
+
+-- history: 记录/获取/清空/去空
+local history = require("rslime.history")
+history.clear()
+history.record("auto a = 1;")
+history.record("   ")          -- 空白不记
+history.record("auto b = 2;")
+local h = history.get()
+assert(#h == 2 and h[1] == "auto a = 1;" and h[2] == "auto b = 2;")
+
 print("smoke_test OK")

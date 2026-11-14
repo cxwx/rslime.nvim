@@ -8,10 +8,13 @@ local defaults = {
   startup_cmds = {},   -- cling commands sent after startup
   cell_delimiter = "^%s*//%s*%%%%",
   run_all_delay = 0,   -- >0: send cells one by one with this delay (ms)
+  send_keep_focus = true, -- send without stealing focus: cursor stays in the source buffer
+                        -- (false: jump to the REPL window on every send)
   http_port = 8080,
   http_open = true,    -- open the browser after starting THttpServer
   completion = false,  -- off by default: LSP covers most of it; the live source only adds
                        -- REPL-session symbols (objects made interactively, .L, autoload)
+  diagnostics = false, -- mark cling errors from cell sends back onto the source cell
   -- mappings are prefix + keys.<action>; prefix = nil registers no mappings
   -- global: start/toggle/restart/quit/focus/http; c/cpp buffers: cell/line/visual/file/undo/run_all
   -- set a suffix to false to disable that mapping
@@ -34,7 +37,10 @@ local defaults = {
     run_before = "B",   -- cells strictly before the cursor's cell
     run_after = "A",    -- the cursor's cell and everything after
     eval = "e",         -- eval word (n) / selection (x) in the live session
+    sign = "S",         -- signatures + docs for the identifier before the cursor
     vars = "v",         -- session variable panel
+    replay = "p",       -- re-send everything recorded this session (rebuild a fresh kernel)
+    hover = "K",        -- live-session hover (Dump) on the word under the cursor; NOT the K key
   },
 }
 
@@ -68,7 +74,7 @@ function M.setup(opts)
     -- ft lazy-loading: the FileType event has already fired, register on the current c/cpp buffer
     local ft = vim.bo.filetype
     if ft == "c" or ft == "cpp" then
-      keymaps.apply_to_buf(vim.api.nvim_get_current_buf(), M.config.prefix, M.config.keys, M.config.short_desc)
+      keymaps.apply_to_buf(vim.api.nvim_get_current_buf(), M.config.prefix, M.config.keys, M.config.short_desc, M.config)
     end
   end
   return M.config

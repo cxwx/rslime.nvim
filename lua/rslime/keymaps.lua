@@ -13,7 +13,10 @@ local buf_actions = {
   { "n", "run_after", "RslimeRunAfter", "run cells from cursor", "󰖰 after" },
   { "n", "eval", "RslimeEval", "eval word in session", "󰡎 eval" },
   { "x", "eval", "RslimeEvalVisual", "eval selection in session", "󰡎 eval" },
+  { "n", "sign", "RslimeSign", "signatures + docs", "󰊕 sign" },
   { "n", "vars", "RslimeVars", "session variables", "󰬹 vars" },
+  { "n", "replay", "RslimeReplay", "replay session history", "󰒋 replay" },
+  { "n", "hover", "RslimeHover", "live hover (Dump)", "󰡎 hover" },
   { "x", "visual", nil, "send selection", "󰅩 visual" }, -- range command handled separately
 }
 
@@ -22,7 +25,8 @@ local buf_actions = {
 ---@param prefix string
 ---@param keys table
 ---@param short boolean? short which-key descriptions (icon + word, no "rslime " prefix)
-function M.apply_to_buf(bufnr, prefix, keys, short)
+---@param opts table? extra cfg
+function M.apply_to_buf(bufnr, prefix, keys, short, opts)
   keys = keys or {}
   for _, m in ipairs(buf_actions) do
     local mode, action, command, desc, sdesc = m[1], m[2], m[3], m[4], m[5]
@@ -72,7 +76,7 @@ function M.apply(cfg)
     group = augroup,
     pattern = { "c", "cpp" },
     callback = function(args)
-      M.apply_to_buf(args.buf, prefix, keys, short)
+      M.apply_to_buf(args.buf, prefix, keys, short, cfg)
     end,
   })
 end

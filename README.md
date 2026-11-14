@@ -28,6 +28,11 @@ Neovim plugin dependencies: none.
 - **Run before / after**: run all cells above the cursor (re-run the setup part) or from the cursor down (Jupyter's *Run All Above* / *Run Selected and Below*)
 - **Live eval**: `,r0e` evaluates the word under the cursor (or the visual selection) in the running session and floats the result — hover `hist` and see its live entries/mean. Bad expressions show the compiler error in the float; the session never dies
 - **Variable panel**: `,r0v` lists every global in the session with its type; pick one to evaluate it — the notebook "variables view", ROOT edition
+- **Signatures & docs**: `,r0S` on `hist.Draw(` / `TH1F::Fill` floats every overload prototype at once, plus the class-guide doc string from the reflection dictionary when available
+- **Error marking** *(opt-in)*: cling errors from a sent cell are marked back onto the source cell as diagnostics — `input_line` locations are mapped through the cell range
+- **Session replay**: `,r0p` re-sends every block you've sent this session (cells, lines, selections), in order — after a kernel restart, one key rebuilds the session; works across files
+- **Live hover** (dap-style panel): `,r0K` (its own key — your `K` / LSP hover stays untouched) evaluates the word under the cursor in the session; pointers are followed by `Dump()`, so you see data members with their current values (`fNcells 102 …`), not just an address; non-TObject classes fall back to `Print()`. The result opens as a persistent, focused `rslime-dump` panel with syntax-highlighted member/value/comment columns: `q`/`<Esc>` closes, `r` re-reads live memory, `<CR>`/double-click steps into a member object (`fXaxis ->…` → dump of the axis)
+- **`rootrepl` filetype**: the REPL terminal buffer gets its own filetype (daprepl-style) — ftplugin ships an in-REPL `<C-c>` interrupt and a `C-x C-o` omnifunc; with blink.cmp, `per_filetype = { rootrepl = { "rslime" } }` gives live-session completion *inside* the REPL window
 - **Kernel restart**: `.q` → `gSystem->Exit(0)` → force kill, three-level fallback; the REPL comes back automatically
 - **Undo**: roll back the last n cling transactions (`:RslimeUndo 3`)
 - **THttpServer**: one key to start it and open the browser — inspect variables and canvases from the background
@@ -66,9 +71,12 @@ require("rslime").setup({
   startup_cmds = {},               -- cling commands sent after startup
   cell_delimiter = "^%s*//%s*%%%%",-- cell header pattern
   run_all_delay = 0,               -- >0: send cells one by one with this delay (ms)
+  send_keep_focus = true,          -- send without stealing focus: the cursor stays in the
+                                   -- source buffer; false jumps to the REPL window on send
   http_port = 8080,                -- THttpServer port
   http_open = true,                -- open the browser after starting THttpServer
   completion = false,              -- opt-in: live-session completion (see below)
+  diagnostics = false,             -- opt-in: mark cling errors back onto the sent cell
   short_desc = false,              -- true: compact which-key labels ("󰖯 before" instead of
                                    --       "rslime run cells before cursor"); needs a Nerd Font
   prefix = nil,                    -- nil registers no mappings
@@ -79,12 +87,15 @@ require("rslime").setup({
     run_before = "B",              -- cells strictly before the cursor's cell
     run_after = "A",               -- the cursor's cell and everything after
     eval = "e",                    -- eval word (n) / selection (x) in the live session
+    sign = "S",                    -- overload prototypes + docs
     vars = "v",                    -- session variable panel
+    replay = "p",                  -- re-send all blocks recorded this session
+    hover = "K",                   -- live hover (Dump); NOT the K key itself
   },
 })
 ```
 
-Mapping rules: `start/toggle/restart/quit/focus/http` are global; `cell/line/visual/file/undo/run_all/run_before/run_after/eval/vars` are buffer-local to c/cpp files. Set any suffix to `false` to disable it. `short_desc = true` swaps the verbose which-key labels for compact `"󰖯 before"`-style ones (Nerd Font required).
+Mapping rules: `start/toggle/restart/quit/focus/http` are global; `cell/line/visual/file/undo/run_all/run_before/run_after/eval/sign/vars/replay/hover` are buffer-local to c/cpp files. Set any suffix to `false` to disable it. `short_desc = true` swaps the verbose which-key labels for compact `"󰖯 before"`-style ones (Nerd Font required).
 
 ## Live-session completion (opt-in)
 
@@ -144,8 +155,13 @@ Notes:
 | `RslimeRunAfter` | Run the cursor's cell and all cells after it |
 | `RslimeEval` | Evaluate the word under the cursor in the session, float the result |
 | `RslimeEvalVisual` | Evaluate the visual selection |
+| `RslimeSign` | Overload prototypes + docs for the identifier before the cursor |
 | `RslimeVars` | Session variable panel — pick a global to evaluate |
+| `RslimeReplay` | Re-send all blocks recorded this session, in order |
+| `RslimeHover` | Live-session hover (Dump) on the word under the cursor |
 | `RslimeUndo [n]` | `.undo n` — roll back cling transactions |
+
+Menus/pickers: the table above is code — `require("rslime.commands").menu()` returns `{ display, cmd, desc }` items, and `.all()` the full definitions (`range`, `nargs`, `run`). The `:Rslime*` commands themselves are registered from that same table. For a grouped view (e.g. [nvzone/menu](https://github.com/nvzone-menu)): `require("menu").open(require("rslime.menu").nvzone(), { mouse = true })` — 4 groups (session / send / run / inspect), one entry per command.
 
 ## Example
 
@@ -167,22 +183,9 @@ Open a c/cpp file → start the REPL → put the cursor inside a cell and hit th
 
 See [`script/test.cpp`](script/test.cpp) for cells covering THttpServer, undo and restart testing.
 
-## Roadmap · 画大饼 🫓
+## Roadmap
 
-> 终极目标：把 Emacs SLIME 那套“编辑器问活进程”的工作模式搬到 ROOT 上。SLIME 的本质是一条通往运行中 Lisp 镜像的通道（swank）加 N 个查询命令；这里对应成一条通往运行中 Cling 会话的 sentinel 问答通道，之后每个功能都只是在这条通道上加一个命令。
-
-- [x] **P0 · 通道**：REPL 启动时自动注入一小段解释执行的 C++ helper，建立“请求 id + sentinel 应答”协议 —— 一切功能的地基 ✅ 已完成
-- [x] **P0 · 活会话补全**：通过反射（`TClass` / `TGlobal` / `TClassTable`）把运行中会话的符号喂给 [blink.cmp](https://github.com/Saghen/blink.cmp) —— 你在 REPL 里造的 `hist`、`.L` 进来的函数、autoload 的类，clangd 不知道的它都知道。**默认关闭**：日常 clangd 够用，LSP 管缓冲区，它管会话态，要时再开 ✅ 已完成
-- [x] **P1 · 变量求值**：光标处表达式发进活会话求值，浮窗显示值和类型（表达式由 REPL 本体执行，打错只报错不崩会话） ✅ 已完成
-- [x] **P1 · 变量面板**：列出会话内存里所有全局量与类型，选中即求值到浮窗 —— notebook 变量视图的 ROOT 版 ✅ 已完成
-- [ ] **P2 · 签名帮助 / 文档**：`Func(` 处列出全部重载原型，hover 显示反射字典里的 class guide 注释
-- [ ] **P3 · 循环增强**：重发 cell 前自动 `.undo` 旧事务；REPL 报错行回标成 Neovim diagnostic
-
-**不画的饼**（想清楚了，不做）：
-
-- 参数位置感知的语义补全 —— 需要修 Cling 重建 ROOT，且大半收益被 clangd 覆盖
-- 编辑器缓冲区局部变量的补全 —— 只有 Lisp 的 homoiconic reader 做得到（这正是 SLIME 的天赋），C++ 交给 LSP
-- 调试器集成 —— Cling 没有 DAP
+P0–P3 are done: the sentinel RPC channel, live-session completion, variable eval & panel, signatures/docs, and error marking — see [Features](#features). What's cooking next (session replay, hover fallback, signature auto-trigger, inline eval …) lives in [`TODO.md`](TODO.md), along with the ideas deliberately *not* being built and why.
 
 ## License
 
@@ -190,4 +193,5 @@ MIT
 
 ## Acknowledgements
 
-- **[AtomCode](https://atomcode.atomgit.com/)** — the terminal AI coding agent ([open source](https://atomgit.com/atomgit_atomcode/atomcode)) this plugin was developed end-to-end with, powered by **GLM-5.3-flash** from [Zhipu AI](https://open.bigmodel.cn/).
+- **[Claude Code](https://claude.com/claude-code) — the CLI coding agent** this plugin's swank-style roadmap (sentinel RPC channel, live-session completion, eval/panel, signatures, error marking, replay) was designed, implemented and tested with, end to end on a live ROOT session
+- **[AtomCode](https://atomcode.atomgit.com/)** — the terminal AI coding agent ([open source](https://atomgit.com/atomgit_atomcode/atomcode)) the original cell/send workflow was developed with, powered by **GLM-5.3-flash** from [Zhipu AI](https://open.bigmodel.cn/).

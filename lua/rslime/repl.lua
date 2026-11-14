@@ -8,6 +8,8 @@ local state = {
   http_started = nil,
 }
 
+local history = require("rslime.history")
+
 local cfg = nil
 
 function M._set_config(c) cfg = c end
@@ -20,6 +22,14 @@ end
 local function on_split_opened(bufnr)
   state.bufnr = bufnr
   state.winid = vim.fn.bufwinid(bufnr)
+  -- dap-repl style window: a REPL panel, not a code buffer
+  local win = state.winid
+  if win and win ~= -1 then
+    vim.wo[win].number = false
+    vim.wo[win].relativenumber = false
+    vim.wo[win].wrap = false
+    vim.wo[win].signcolumn = "no"
+  end
 end
 
 ---Start the ROOT REPL
@@ -72,6 +82,9 @@ function M.start()
     })
   end)
   state.job_id = vim.bo[bufnr].channel
+  -- daprepl-style filetype — AFTER termopen returns: on_buf fires before the
+  -- terminal buffer is finalized and nvim resets 'filetype' during setup
+  vim.bo[bufnr].filetype = "rootrepl"
 
   if #cfg.startup_cmds > 0 or cfg.completion ~= false then
     vim.defer_fn(function()
@@ -91,7 +104,9 @@ function M.send_raw(text)
     end, 1500)
     return
   end
-  M.focus()
+  -- keep focus in the source buffer while sending; send_keep_focus=false restores
+  -- the jump-to-REPL behavior
+  if cfg.send_keep_focus == false then M.focus() end
   pcall(vim.api.nvim_chan_send, state.job_id, text)
 end
 
@@ -103,35 +118,46 @@ end
 ---Send the cell under the cursor
 function M.send_cell()
   local bufnr = vim.api.nvim_get_current_buf()
-  local _, text = require("rslime.cells").cell_at(bufnr, vim.fn.line("."), cfg.cell_delimiter)
+  local cell, text = require("rslime.cells").cell_at(bufnr, vim.fn.line("."), cfg.cell_delimiter)
   if not text or text:match("^%s*$") then
     vim.notify("rslime: no cell under cursor", vim.log.levels.WARN)
     return
   end
+  if cfg.diagnostics and cell then
+    require("rslime.diag").capture(bufnr, cell)
+  end
+  history.record(text)
   M.send(text)
 end
 
 ---Send the current line
 function M.send_line()
-  M.send(vim.fn.getline("."))
+  local text = vim.fn.getline(".")
+  history.record(text)
+  M.send(text)
 end
 
 ---Send the visual selection
 function M.send_selection()
   local lines = vim.api.nvim_buf_get_lines(
     0, vim.fn.line("'<") - 1, vim.fn.line("'>"), false)
-  M.send(table.concat(lines, "\n"))
+  local text = table.concat(lines, "\n")
+  history.record(text)
+  M.send(text)
 end
 
 ---Send the whole buffer
 function M.send_file()
   local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-  M.send(table.concat(lines, "\n"))
+  local text = table.concat(lines, "\n")
+  history.record(text)
+  M.send(text)
 end
 
 local function run_cell_texts(texts)
   local delay = cfg.run_all_delay or 0
   if delay <= 0 then
+    for _, t in ipairs(texts) do history.record(t) end
     M.send(table.concat(texts, "\n"))
     return
   end
@@ -139,6 +165,7 @@ local function run_cell_texts(texts)
   local function next_cell()
     i = i + 1
     if texts[i] then
+      history.record(texts[i])
       M.send(texts[i])
       vim.defer_fn(next_cell, delay)
     end
@@ -177,6 +204,17 @@ function M.send_after()
     return
   end
   run_cell_texts(texts)
+end
+
+---Replay every recorded block in order (rebuild a fresh kernel's session)
+function M.replay()
+  if not is_running() then
+    vim.notify("rslime: repl not running, starting...", vim.log.levels.WARN)
+    M.start()
+    vim.defer_fn(function() history.replay() end, 2000)
+    return
+  end
+  history.replay()
 end
 
 ---Restart the kernel: .q → gSystem->Exit(0) → jobstop
