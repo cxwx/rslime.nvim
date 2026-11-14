@@ -175,8 +175,37 @@ vim.defer_fn(function()
                                 and table.concat(texts, " "):find("(int) 7", 1, true) ~= nil
                               say(("block inline -> %d marks, k=%s [%s]"):format(
                                 #cms, tostring(okc), table.concat(texts, " | ")))
-                              finish(ok and ok3 and #c4 >= 3 and oke and okb and okv and oks
-                                and okd and okr and okh and oki and okc)
+
+                              -- signature: `(` 后活会话重载 + 参数位置 + 查不到弃权
+                              local sig = require("rslime.signature")
+                              sig.get({ line = "p->Fill(", pos = { 0, 8 } }, function(help)
+                                local oks = help and #help.signatures >= 3
+                                  and help.signatures[1].label:find("TH1::Fill", 1, true) ~= nil
+                                  and help.activeParameter == 0
+                                sig.get({ line = "p->Fill(1.5, ", pos = { 0, 14 } }, function(h2)
+                                  local oks2 = h2 and h2.activeParameter == 1
+                                  sig.get({ line = "zzz_nope(", pos = { 0, 9 } }, function(h3)
+                                    local oks3 = h3 == nil  -- 弃权 -> 让位 LSP
+                                    say(("signature -> fill=%s p1=%s abstain=%s"):format(
+                                      tostring(oks), tostring(oks2), tostring(oks3)))
+                                    -- draw: 光标对象 -> 类型感知 Draw -> canvas 建立
+                                    local dbuf = vim.api.nvim_create_buf(false, true)
+                                    vim.api.nvim_buf_set_lines(dbuf, 0, -1, false, { "hist;" })
+                                    vim.api.nvim_set_current_buf(dbuf)
+                                    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+                                    require("rslime.draw").draw()
+                                    vim.defer_fn(function()
+                                      rpc.request_expr("gROOT->GetListOfCanvases()->GetEntries()", function(en)
+                                        local okd2 = en ~= nil and en[1] ~= nil
+                                          and en[1]:find("^%(int%)%s*[1-9]") ~= nil
+                                        say(("draw -> canvases=%s"):format(en and en[1] or "nil"))
+                                        finish(ok and ok3 and #c4 >= 3 and oke and okb and okv and oks
+                                          and okd and okr and okh and oki and okc and oks2 and oks3 and okd2)
+                                      end, 8000)
+                                    end, 6000)
+                                  end)
+                                end)
+                              end)
                             end, 6000)
                           end, 3000)
                         end)

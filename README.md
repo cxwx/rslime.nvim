@@ -31,6 +31,8 @@ Neovim plugin dependencies: none.
 - **Signatures & docs**: `<leader>r0S` on `hist.Draw(` / `TH1F::Fill` floats every overload prototype at once, plus the class-guide doc string from the reflection dictionary when available
 - **Error marking** *(opt-in)*: cling errors from a sent cell are marked back onto the source cell as diagnostics — `input_line` locations are mapped through the cell range
 - **Inline eval** *(opt-in)*: short results land as virtual text at the end of the line instead of a float; long results still float, `:RslimeInlineClear` wipes the marks
+- **Auto signatures** *(opt-in)*: typing `(` shows the live session's overload prototypes via the blink signature provider — LSP answers for buffer-known symbols, this source abstains (returns nil) unless the symbol exists in the session, so it only ever fills the gap LSP structurally cannot (`hist` built two cells ago, `.L`-loaded functions)
+- **Session draw**: `<leader>r0d` draws the word under the cursor in the live session — type-aware via the eval + reflection round-trip (stack objects get `.`, pointers `->`; `TTree` prompts for a draw expression; classes without `Draw` are rejected up front), then `Modified()+Update()` in the same cling transaction so the web canvas pops up in the browser. `<leader>r0D` overlays with `same`, `:RslimeDraw COLZ` passes any option; replay redraws with the session
 - **Run-block inline** *(on by default)*: running a single block (`:RslimeSendCell`) re-evaluates the variables it declares/assigns and shows their values at the line end — a re-run that produced a different value is highlighted as *changed* (dap-virtual-text style); `run all/before/after` deliberately skip it
 - **Session replay**: `<leader>r0p` re-sends every block you've sent this session (cells, lines, selections), in order — after a kernel restart, one key rebuilds the session; works across files
 - **Live hover** (dap-style panel): `<leader>r0K` (its own key — your `K` / LSP hover stays untouched) evaluates the word under the cursor in the session; pointers are followed by `Dump()`, so you see data members with their current values (`fNcells 102 …`), not just an address; non-TObject classes fall back to `Print()`. The result opens as a persistent, focused `rslime-dump` panel with syntax-highlighted member/value/comment columns: `q`/`<Esc>` closes, `r` re-reads live memory, `<CR>`/double-click steps into a member object (`fXaxis ->…` → dump of the axis)
@@ -80,8 +82,11 @@ require("rslime").setup({
   completion = false,              -- opt-in: live-session completion (see below)
   diagnostics = false,             -- opt-in: mark cling errors back onto the sent cell
   inline_eval = false,             -- opt-in: short eval results as virtual text at the line end
+  signature = false,               -- opt-in: auto signature help on `(` from the live session (blink);
+                                   -- completion stays LSP's — the source abstains for buffer-known symbols
   run_block_inline = true,         -- after running ONE block (send cell), show that block's
                                    -- variable values inline; run all/before/after skip it
+  run_block_inline_delay = 600,    -- ms to wait after sending before probing (let cling finish)
   short_desc = false,              -- true: compact which-key labels ("󰖯 before" instead of
                                    --       "rslime run cells before cursor"); needs a Nerd Font
   prefix = nil,                    -- nil registers no mappings
@@ -96,11 +101,14 @@ require("rslime").setup({
     vars = "v",                    -- session variable panel
     replay = "p",                  -- re-send all blocks recorded this session
     hover = "K",                   -- live hover (Dump); NOT the K key itself
+    inline_clear = "x",            -- wipe the buffer's inline eval results
+    draw = "d",                    -- draw the word under the cursor (web canvas)
+    draw_same = "D",               -- draw with "same" (overlay on the current pad)
   },
 })
 ```
 
-Mapping rules: `start/toggle/restart/quit/focus/http` are global; `cell/line/visual/file/undo/run_all/run_before/run_after/eval/sign/vars/replay/hover` are buffer-local to c/cpp files. Set any suffix to `false` to disable it. `short_desc = true` swaps the verbose which-key labels for compact `"󰖯 before"`-style ones (Nerd Font required).
+Mapping rules: `start/toggle/restart/quit/focus/http` are global; everything else (`cell/line/visual/file/undo/run_all/run_before/run_after/eval/sign/vars/replay/hover/inline_clear/draw/draw_same`) is buffer-local to c/cpp files. Set any suffix to `false` to disable it. `short_desc = true` swaps the verbose which-key labels for compact `"󰖯 before"`-style ones (Nerd Font required).
 
 ## Live-session completion (opt-in)
 
@@ -115,14 +123,18 @@ It works by injecting a small C++ helper into the running interpreter (interpret
 Enable and wire into [blink.cmp](https://github.com/Saghen/blink.cmp) (v2):
 
 ```lua
-require("rslime").setup({ prefix = "<leader>r0", completion = true })
+require("rslime").setup({ prefix = "<leader>r0", completion = true, signature = true })
 
 require("blink.cmp").setup({
+  signature = { enabled = true },
   sources = {
-    per_filetype = { cpp = { inherit_defaults = true, "rslime" } },
+    per_filetype = {
+      cpp = { inherit_defaults = true, "rslime" },
+      rootrepl = { "rslime" },  -- live-session completion inside the REPL window
+    },
     providers = {
       rslime = {
-        module = "rslime.complete",
+        module = "rslime.blink",  -- completion + signature provider shipped by the plugin
         async = true,
         score_offset = 100,  -- rank above LSP: session state beats static guesses
         max_items = 3,
@@ -135,6 +147,8 @@ require("blink.cmp").setup({
   },
 })
 ```
+
+No shim needed: blink requires provider modules without pcall, but lazy.nvim intercepts `require` and loads the owning plugin on demand — `module = "rslime.blink"` works with any lazy-loading style (`keys`, `ft`, `lazy = true`), same as every other blink source plugin.
 
 Notes:
 - Completion queries the session, not the buffer: a variable must be **sent to the REPL first** (`<leader>r0k`); buffer-only locals are LSP's job
@@ -166,8 +180,26 @@ Notes:
 | `RslimeHover` | Live-session hover (Dump) on the word under the cursor |
 | `RslimeUndo [n]` | `.undo n` — roll back cling transactions |
 | `RslimeInlineClear` | Wipe the inline eval results in the buffer |
+| `RslimeDraw [opt]` | Draw the word under the cursor in the session (opt = `same`, `COLZ`, …) |
 
 Menus/pickers: the table above is code — `require("rslime.commands").menu()` returns `{ display, cmd, desc }` items, and `.all()` the full definitions (`range`, `nargs`, `run`). The `:Rslime*` commands themselves are registered from that same table. For a grouped view (e.g. [nvzone/menu](https://github.com/nvzone-menu)): `require("menu").open(require("rslime.menu").nvzone(), { mouse = true })` — 4 groups (session / send / run / inspect), one entry per command.
+
+## Filetypes
+
+The plugin ships two filetypes (dap-style):
+
+- **`rootrepl`** — the REPL terminal buffer. In-REPL keys: `<C-c>` sends a real interrupt (`\3`), completion falls back to `C-x C-o` omnifunc when blink isn't wired
+- **`rslime-dump`** — the persistent hover/panel buffer. Keys: `q` / `<Esc>` close, `r` re-read live memory (Dump values are a snapshot), `<CR>` / double-click on a member line steps into that member object
+
+## Highlights
+
+| Group | Default | Used by |
+|---|---|---|
+| `RslimeCellHeader` | `SpecialComment` | `// %%` cell headers |
+| `RslimeInline` | `Special` | inline eval virtual text |
+| `RslimeInlineChanged` | `DiagnosticVirtualTextWarn` | a re-run whose value changed (dap-virtual-text style) |
+
+Override with `vim.api.nvim_set_hl(0, "RslimeInline", { ... })` after `setup()`.
 
 ## Example
 
@@ -191,7 +223,7 @@ See [`script/test.cpp`](script/test.cpp) for cells covering THttpServer, undo an
 
 ## Roadmap
 
-P0–P3 are done: the sentinel RPC channel, live-session completion, variable eval & panel, signatures/docs, and error marking — see [Features](#features). What's cooking next (session replay, hover fallback, signature auto-trigger, inline eval …) lives in [`TODO.md`](TODO.md), along with the ideas deliberately *not* being built and why.
+The original roadmap shipped end to end: sentinel RPC channel, live-session completion, variable eval & panel, signatures (manual + auto), error marking, replay, hover panel, inline eval, run-block inline and session draw — see [Features](#features). [`TODO.md`](TODO.md) holds the ideas deliberately *not* being built, each with the reason (measured, not guessed).
 
 ## License
 
@@ -199,5 +231,6 @@ MIT
 
 ## Acknowledgements
 
-- **[Claude Code](https://claude.com/claude-code) — the CLI coding agent** this plugin's swank-style roadmap (sentinel RPC channel, live-session completion, eval/panel, signatures, error marking, replay) was designed, implemented and tested with, end to end on a live ROOT session
-- **[AtomCode](https://atomcode.atomgit.com/)** — the terminal AI coding agent ([open source](https://atomgit.com/atomgit_atomcode/atomcode)) the original cell/send workflow was developed with, powered by **GLM-5.3-flash** from [Zhipu AI](https://open.bigmodel.cn/).
+- **[Claude Code](https://claude.com/claude-code)** — the CLI coding agent this plugin's swank-style roadmap (sentinel RPC channel, live-session completion, eval/panel, signatures, error marking, replay, hover, draw) was designed, implemented and tested with, end to end on a live ROOT session
+- **[GLM](https://www.z.ai/)** — the model (GLM, by Z.ai / Zhipu AI) powering the coding agents above through the whole journey
+- **[AtomCode](https://atomcode.atomgit.com/)** — the open-source terminal AI coding agent the original cell/send workflow was developed with

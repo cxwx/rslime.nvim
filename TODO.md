@@ -17,14 +17,15 @@
 - [x] **hover**：`<leader>r0K`（独立按键，不碰用户的 K/LSP hover）—— 活会话求值光标处单词；指针/对象自动追 `Dump()` 显示数据成员当前值，非 TObject 降级 `Print()`
 - [x] **面板专属 filetype `rslime-dump`（dapui 式）**：syntax 高亮三列结构；ftplugin 键位 `q`/`<Esc>` 关、`r` 刷新为最新内存值、`<CR>`/双击 step-into 成员对象 ✅ 已完成
 - [x] **REPL 缓冲区 filetype = `rootrepl`（daprepl 式）**：ftplugin 挂 REPL 内 `<C-c>` 中断 + omnifunc 后备；blink `per_filetype = { rootrepl = { "rslime" } }` 实现 REPL 终端内活会话补全（一并完成） ✅ 已完成
-- [ ] **签名自动触发**：`(` 后自动弹签名（接入 blink signature），替代手动 `<leader>r0S`
+- [x] **签名自动触发**：`(` 后自动弹活会话重载（`signature = true` 开启，blink signature provider）；查不到即弃权让位 LSP，参数位置按逗号深度计数 ✅ 已完成
 - [x] **eval inline**：短结果（`(double) 0.5` 级别）以 virtual text 显示在行尾（`inline_eval = true` 开启，`<leader>r0x` 清除）；长结果仍走浮窗 ✅ 已完成
 - [x] **run block inline**：单块运行后自动求值该块的变量并显示（`run_block_inline`，默认开）；值变化时 Changed 高亮；run all/before/after 不触发 ✅ 已完成
-- [ ] **`.L`/`.x` 路径补全**：meta 命令后补全文件路径（helper 侧已有文件枚举的反射 API）
-- [ ] **THttpServer 面板**：不只开浏览器——列会话里的 canvas/对象，点选即在浏览器定位（THttpServer 的 item URI）
+- [x] **会话画图**：`<leader>r0d` 光标对象类型感知 `Draw()`（eval 拿类名 → 反射查 Draw 重载：无参直画 / TTree 弹参数输入 / 无 Draw 提前 notify；指针 `->` 对象 `.`；补 `Modified+Update` 同事务推送 web canvas），`<leader>r0D` 叠加 same，`:RslimeDraw COLZ` 传 option；replay 连画一起重放 ✅ 已完成
 
 ## 不画的饼（想清楚了，不做）
 
+- THttpServer 面板 —— 实测（ROOT 6.41）：REST 侧无层级枚举（对象树只走 websocket GUI）；`Register` 的目录 REST 访问不到；canvas 走 web canvas **创建时已自动开浏览器**；`exe.json` 默认只读锁死且会话内执行本就有更安全的 REPL 通道。取而代之做了上面的会话画图
+- `.L`/`.x` 路径补全 —— REPL 窗口里 root 原生 Tab 已覆盖；源码 cell 里 blink 内置 `path` provider 已覆盖。两侧都有现成的，没有空白可填
 - 重发 cell 前自动 `.undo` 旧事务 —— 一个 cell 会产生**多个** cling 事务（每条顶层语句一个），盲 undo 数量必然猜错，会悄悄污染会话状态。可靠循环就是 `<leader>r0R` 重启 + `<leader>r0B` 重跑 setup cells
 - 参数位置感知的语义补全 —— 需要修 Cling 重建 ROOT，且大半收益被 clangd 覆盖
 - 编辑器缓冲区局部变量的补全 —— 只有 Lisp 的 homoiconic reader 做得到（这正是 SLIME 的天赋），C++ 交给 LSP

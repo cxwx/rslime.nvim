@@ -34,6 +34,7 @@ local layout = {
     { "RslimeHover",      "󰡎 hover" },
     { "RslimeVars",       "󰬹 vars" },
     { "RslimeInlineClear", "󰡎 clear" },
+    { "RslimeDraw",        "󰓫 draw" },
   } },
 }
 

@@ -15,6 +15,8 @@ local defaults = {
   completion = false,  -- off by default: LSP covers most of it; the live source only adds
                        -- REPL-session symbols (objects made interactively, .L, autoload)
   diagnostics = false, -- mark cling errors from cell sends back onto the source cell
+  signature = false,  -- opt-in: auto signature help on `(` from the live session
+                       -- (blink signature provider; LSP covers buffer-known symbols)
   inline_eval = false, -- opt-in: short eval results as virtual text at the line end;
                        -- long results still float (RslimeInlineClear wipes the marks)
   run_block_inline = true, -- after running ONE block (send cell), show its variable
@@ -47,6 +49,8 @@ local defaults = {
     replay = "p",       -- re-send everything recorded this session (rebuild a fresh kernel)
     hover = "K",        -- live-session hover (Dump) on the word under the cursor; NOT the K key
     inline_clear = "x", -- wipe the buffer's inline eval results
+    draw = "d",        -- Draw word under cursor (web canvas opens the browser)
+    draw_same = "D",   -- Draw with "same" (overlay on the current pad)
   },
 }
 

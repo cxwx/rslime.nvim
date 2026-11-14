@@ -30,6 +30,7 @@ function M.all()
     { cmd = "RslimeHover",        desc = "live hover panel (Dump)",              run = function() inspect.hover() end },
     { cmd = "RslimeVars",         desc = "session variable panel",               run = function() inspect.show_vars() end },
     { cmd = "RslimeInlineClear",  desc = "clear inline eval results",            run = function() require("rslime.inline").clear(0) end },
+    { cmd = "RslimeDraw",         desc = "Draw the word under cursor (arg = option, e.g. same/COLZ)", nargs = "?", run = function(a) require("rslime.draw").draw(a.args ~= "" and a.args or nil) end },
   }
 end
 

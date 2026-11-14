@@ -18,6 +18,8 @@ local buf_actions = {
   { "n", "replay", "RslimeReplay", "replay session history", "󰒋 replay" },
   { "n", "hover", "RslimeHover", "live hover (Dump)", "󰡎 hover" },
   { "n", "inline_clear", "RslimeInlineClear", "clear inline evals", "󰡎 clear" },
+  { "n", "draw", "RslimeDraw", "draw in session", "󰓫 draw" },
+  { "n", "draw_same", nil, "draw same", "󰓫 same" }, -- ":RslimeDraw same"
   { "x", "visual", nil, "send selection", "󰅩 visual" }, -- range command handled separately
 }
 
@@ -36,6 +38,8 @@ function M.apply_to_buf(bufnr, prefix, keys, short, opts)
       local rhs
       if command then
         rhs = mode == "x" and ":<C-u>" .. command .. "<cr>" or cmd(command)
+      elseif action == "draw_same" then
+        rhs = ":<C-u>RslimeDraw same<cr>"
       else
         rhs = ":<C-u>RslimeSendSelection<cr>"
       end
