@@ -112,6 +112,23 @@ Open a c/cpp file → start the REPL → put the cursor inside a cell and hit th
 
 See [`script/test.cpp`](script/test.cpp) for cells covering THttpServer, undo and restart testing.
 
+## Roadmap · 画大饼 🫓
+
+> 终极目标：把 Emacs SLIME 那套“编辑器问活进程”的工作模式搬到 ROOT 上。SLIME 的本质是一条通往运行中 Lisp 镜像的通道（swank）加 N 个查询命令；这里对应成一条通往运行中 Cling 会话的 sentinel 问答通道，之后每个功能都只是在这条通道上加一个命令。
+
+- [ ] **P0 · 通道**：REPL 启动时自动注入一小段解释执行的 C++ helper，建立“请求 id + sentinel 应答”协议 —— 一切功能的地基
+- [ ] **P0 · 活会话补全**：通过反射（`TTabCom` / `TClass` / `TGlobal`）把运行中会话的符号喂给 [blink.cmp](https://github.com/Saghen/blink.cmp) —— 你在 REPL 里造的 `hist`、`.L` 进来的函数、autoload 的类，clangd 不知道的它都知道；与 LSP 补全并存，各管一半
+- [ ] **P1 · 变量求值**：光标处表达式发进活会话求值，浮窗显示值和类型 —— hover 到 `hist` 直接看它现在的 entries 和 mean
+- [ ] **P1 · 变量面板**：列出会话内存里所有全局量与类型，选中即 `Print()` 到浮窗 —— notebook 变量视图的 ROOT 版
+- [ ] **P2 · 签名帮助 / 文档**：`Func(` 处列出全部重载原型，hover 显示反射字典里的 class guide 注释
+- [ ] **P3 · 循环增强**：重发 cell 前自动 `.undo` 旧事务；REPL 报错行回标成 Neovim diagnostic
+
+**不画的饼**（想清楚了，不做）：
+
+- 参数位置感知的语义补全 —— 需要修 Cling 重建 ROOT，且大半收益被 clangd 覆盖
+- 编辑器缓冲区局部变量的补全 —— 只有 Lisp 的 homoiconic reader 做得到（这正是 SLIME 的天赋），C++ 交给 LSP
+- 调试器集成 —— Cling 没有 DAP
+
 ## License
 
 MIT
