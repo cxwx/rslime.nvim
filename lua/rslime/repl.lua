@@ -1,13 +1,14 @@
 local M = {}
 
 local state = {
-  bufnr = nil,   -- 终端缓冲区
-  winid = nil,   -- 终端窗口
-  job_id = nil,  -- job/chan id
+  bufnr = nil,
+  winid = nil,
+  job_id = nil,
   restarting = false,
+  http_started = nil,
 }
 
-local cfg = nil -- setup() 注入的配置
+local cfg = nil
 
 function M._set_config(c) cfg = c end
 
@@ -33,42 +34,44 @@ function M.start()
     return
   end
   local bufnr = vim.api.nvim_create_buf(true, false)
-  local pos, size = cfg.position or "right", cfg.width or 80
+  local pos, size = cfg.position or "bottom", cfg.width or 80
   local split = pos == "bottom" and "botright split" or "botright vsplit"
   vim.cmd(split .. " | buffer " .. bufnr)
-  if pos ~= "bottom" then vim.cmd("vertical resize " .. size) else vim.cmd("resize " .. (cfg.height or math.floor(vim.o.lines / 2))) end
+  if pos ~= "bottom" then
+    vim.cmd("vertical resize " .. size)
+  else
+    vim.cmd("resize " .. (cfg.height or math.floor(vim.o.lines / 2)))
+  end
   on_split_opened(bufnr)
   vim.cmd("wincmd p")
 
-  -- 必须在 REPL buffer 上启动 termopen（当前 buffer 已被 wincmd p 切回源文件，
-  -- 直接 termopen 会把源文件 buffer 变成终端，内容被替换成 [No Name]）
+  -- termopen 必须在 REPL buffer 上执行，否则会替换源文件 buffer
   vim.api.nvim_buf_call(bufnr, function()
     vim.fn.termopen(cfg.cmd, {
-    cwd = vim.fn.getcwd(),
-    -- 屏蔽 snacks.words 等在此终端 buffer 上发 LSP documentHighlight（term:// URI 会被 clangd 拒绝）
-    on_buf = function()
-      vim.b[bufnr].snacks_words = false
-    end,
-    on_exit = function()
-      state.job_id, state.winid, state.http_started = nil, state.winid, nil
-      -- 任何退出都自动关闭终端 buffer，避免停在 [Process exited 0] 等按键
-      local buf = state.bufnr
-      state.bufnr = nil
-      vim.defer_fn(function()
-        if buf and vim.api.nvim_buf_is_valid(buf) then
-          vim.api.nvim_buf_delete(buf, { force = true })
+      cwd = vim.fn.getcwd(),
+      -- term:// 上发 LSP documentHighlight 会被 clangd 拒绝
+      on_buf = function()
+        vim.b[bufnr].snacks_words = false
+      end,
+      on_exit = function()
+        state.job_id, state.winid, state.http_started = nil, state.winid, nil
+        local buf = state.bufnr
+        state.bufnr = nil
+        -- 自动关闭终端 buffer，避免停在 [Process exited 0] 等按键
+        vim.defer_fn(function()
+          if buf and vim.api.nvim_buf_is_valid(buf) then
+            vim.api.nvim_buf_delete(buf, { force = true })
+          end
+        end, 100)
+        if state.restarting then
+          state.restarting = false
+          vim.defer_fn(function() M.start() end, 150)
         end
-      end, 100)
-      if state.restarting then
-        state.restarting = false
-        vim.defer_fn(function() M.start() end, 150)
-      end
-    end,
+      end,
     })
   end)
   state.job_id = vim.bo[bufnr].channel
 
-  -- 执行 startup_cmds（如 .gitinfo、gSystem 等）
   if #cfg.startup_cmds > 0 then
     vim.defer_fn(function()
       for _, c in ipairs(cfg.startup_cmds) do M.send_raw(c .. "\n") end
@@ -76,12 +79,11 @@ function M.start()
   end
 end
 
----向 repl 发送原始文本（含换行）
+---向 repl 发送原始文本（含换行）；未运行时先启动再延迟发送
 function M.send_raw(text)
   if not is_running() then
     vim.notify("rslime: repl not running, starting...", vim.log.levels.WARN)
     M.start()
-    -- 启动后延迟再发
     vim.defer_fn(function()
       if state.job_id then pcall(vim.api.nvim_chan_send, state.job_id, text) end
     end, 1500)
@@ -91,7 +93,7 @@ function M.send_raw(text)
   pcall(vim.api.nvim_chan_send, state.job_id, text)
 end
 
----发送代码块：ROOT/Cling 按行求值，多行块整体写入
+---发送代码块（cling 按行求值，多行块整体写入）
 function M.send(code)
   M.send_raw(code .. "\n")
 end
@@ -113,11 +115,9 @@ function M.send_line()
 end
 
 ---可视选区
----@param use_last boolean true 时用上次选区（'<,'>）
-function M.send_selection(use_last)
-  local start_mark, end_mark = use_last and "'<" or "'<", use_last and "'>" or "'>"
+function M.send_selection()
   local lines = vim.api.nvim_buf_get_lines(
-    0, vim.fn.line(start_mark) - 1, vim.fn.line(end_mark), false)
+    0, vim.fn.line("'<") - 1, vim.fn.line("'>"), false)
   M.send(table.concat(lines, "\n"))
 end
 
@@ -127,8 +127,7 @@ function M.send_file()
   M.send(table.concat(lines, "\n"))
 end
 
----按顺序发送所有 cell（cling 流式求值；cell 外的头文件/main 等包裹结构自动跳过）
----run_all_delay > 0 时逐 cell 延迟发送（便于观察每块输出），否则一次性写入
+---按顺序发送所有 cell（包裹结构自动跳过；run_all_delay > 0 时逐块延迟发送）
 function M.send_all()
   local texts = require("rslime.cells").all_cell_texts(
     vim.api.nvim_get_current_buf(), cfg.cell_delimiter)
@@ -152,25 +151,22 @@ function M.send_all()
   next_cell()
 end
 
----重启 kernel：.q → gSystem->Exit(0) → 强杀，三级退出
+---重启 kernel：.q → gSystem->Exit(0) → jobstop，三级退出
 function M.restart()
   if not is_running() then M.start() return end
   state.restarting = true
-  -- 温和退出
   pcall(vim.api.nvim_chan_send, state.job_id, ".q\n")
-  -- 1s 后仍活着（cling 忙/析构慢）→ 直接调 exit
   vim.defer_fn(function()
     if is_running() then
       pcall(vim.api.nvim_chan_send, state.job_id, "gSystem->Exit(0)\n")
     end
   end, 1000)
-  -- 2.5s 后仍活着 → 强杀
   vim.defer_fn(function()
     if is_running() then vim.fn.jobstop(state.job_id) end
   end, 2500)
 end
 
----退出 repl
+---退出 repl（buffer 关闭统一由 on_exit 处理）
 function M.quit()
   state.restarting = false
   if is_running() then
@@ -179,16 +175,13 @@ function M.quit()
       if is_running() then vim.fn.jobstop(state.job_id) end
     end, 800)
   end
-  -- buffer 关闭统一由 on_exit 处理
 end
 
 ---切换显示/隐藏
 function M.toggle()
   if state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr)
     and vim.fn.bufwinid(state.bufnr) ~= -1 then
-    -- 隐藏
-    local win = vim.fn.bufwinid(state.bufnr)
-    vim.api.nvim_win_hide(win)
+    vim.api.nvim_win_hide(vim.fn.bufwinid(state.bufnr))
   elseif state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr) then
     local pos = cfg.position or "bottom"
     if pos == "bottom" then
@@ -204,7 +197,7 @@ function M.toggle()
   end
 end
 
----焦点跳到 repl 窗口
+---焦点跳到 repl 窗口（未运行则先启动）
 function M.focus()
   if state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr)
     and vim.fn.bufwinid(state.bufnr) ~= -1 then
@@ -219,8 +212,7 @@ function M.undo(n)
   M.send_raw(string.format(".undo %d\n", n or 1))
 end
 
----在 REPL 里启动 ROOT 的 THttpServer，后台浏览器观察变量
----同一内核会话内重复按键不重复创建（重启内核后状态复位）
+---启动 ROOT THttpServer（重启内核后状态复位）
 function M.http_server(port)
   if state.http_started then
     vim.notify("rslime: THttpServer already started (http://localhost:"
@@ -231,14 +223,13 @@ function M.http_server(port)
   M.send(string.format('THttpServer *serv = new THttpServer("http:%d");', port))
   state.http_started = true
   vim.notify("rslime: THttpServer → http://localhost:" .. port, vim.log.levels.INFO)
-  -- 默认自动打开浏览器（http_open = false 关闭）
   if cfg.http_open ~= false then
     vim.defer_fn(function()
       local url = "http://localhost:" .. port
       if vim.ui and vim.ui.open then
         pcall(vim.ui.open, url)
       else
-        pcall(vim.cmd, string.format("silent! !open %q", url)) -- macOS 兜底
+        pcall(vim.cmd, string.format("silent! !open %q", url))
       end
     end, 500)
   end

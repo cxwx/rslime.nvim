@@ -1,4 +1,3 @@
--- 命令注册
 local repl = require("rslime.repl")
 
 local cmds = {
@@ -18,5 +17,4 @@ for name, fn in pairs(cmds) do
   vim.api.nvim_create_user_command(name, fn, { nargs = name == "RslimeUndo" and "?" or 0 })
 end
 
--- 选区命令（range）
-vim.api.nvim_create_user_command("RslimeSendSelection", function() repl.send_selection(false) end, { range = true })
+vim.api.nvim_create_user_command("RslimeSendSelection", function() repl.send_selection() end, { range = true })
