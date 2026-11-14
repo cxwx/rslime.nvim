@@ -86,6 +86,11 @@ function M.cell_at(bufnr, lnum, delimiter)
   return nil, nil
 end
 
+local function cell_text(bufnr, c)
+  local lines = vim.api.nvim_buf_get_lines(bufnr, c.start - 1, c.stop, false)
+  return table.concat(lines, "\n")
+end
+
 ---All cell texts in order
 ---@param bufnr integer
 ---@param delimiter string
@@ -93,8 +98,37 @@ end
 function M.all_cell_texts(bufnr, delimiter)
   local texts = {}
   for _, c in ipairs(M.parse(bufnr, delimiter)) do
-    local lines = vim.api.nvim_buf_get_lines(bufnr, c.start - 1, c.stop, false)
-    table.insert(texts, table.concat(lines, "\n"))
+    table.insert(texts, cell_text(bufnr, c))
+  end
+  return texts
+end
+
+---Cell texts strictly before the cursor's cell (cursor on a header counts as that cell)
+---@param bufnr integer
+---@param lnum integer cursor line
+---@param delimiter string
+---@return string[]
+function M.cell_texts_before(bufnr, lnum, delimiter)
+  local cur = M.cell_at(bufnr, lnum, delimiter)
+  if not cur then return {} end
+  local texts = {}
+  for _, c in ipairs(M.parse(bufnr, delimiter)) do
+    if c.stop < cur.start then table.insert(texts, cell_text(bufnr, c)) end
+  end
+  return texts
+end
+
+---Cell texts from the cursor's cell to the end (inclusive)
+---@param bufnr integer
+---@param lnum integer cursor line
+---@param delimiter string
+---@return string[]
+function M.cell_texts_after(bufnr, lnum, delimiter)
+  local cur = M.cell_at(bufnr, lnum, delimiter)
+  if not cur then return {} end
+  local texts = {}
+  for _, c in ipairs(M.parse(bufnr, delimiter)) do
+    if c.start >= cur.start then table.insert(texts, cell_text(bufnr, c)) end
   end
   return texts
 end

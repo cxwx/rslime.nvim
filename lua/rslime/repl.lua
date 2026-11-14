@@ -55,6 +55,7 @@ function M.start()
       end,
       on_exit = function()
         state.job_id, state.winid, state.http_started = nil, state.winid, nil
+        pcall(function() require("rslime.rpc").reset() end)
         local buf = state.bufnr
         state.bufnr = nil
         -- auto-close the terminal buffer instead of waiting on [Process exited 0]
@@ -72,9 +73,10 @@ function M.start()
   end)
   state.job_id = vim.bo[bufnr].channel
 
-  if #cfg.startup_cmds > 0 then
+  if #cfg.startup_cmds > 0 or cfg.completion ~= false then
     vim.defer_fn(function()
       for _, c in ipairs(cfg.startup_cmds) do M.send_raw(c .. "\n") end
+      if cfg.completion ~= false then require("rslime.rpc").inject() end
     end, 800)
   end
 end
@@ -127,14 +129,7 @@ function M.send_file()
   M.send(table.concat(lines, "\n"))
 end
 
----Send all cells in order (wrapper structure is skipped; run_all_delay > 0 sends cell by cell)
-function M.send_all()
-  local texts = require("rslime.cells").all_cell_texts(
-    vim.api.nvim_get_current_buf(), cfg.cell_delimiter)
-  if #texts == 0 then
-    vim.notify("rslime: no cells in buffer", vim.log.levels.WARN)
-    return
-  end
+local function run_cell_texts(texts)
   local delay = cfg.run_all_delay or 0
   if delay <= 0 then
     M.send(table.concat(texts, "\n"))
@@ -149,6 +144,39 @@ function M.send_all()
     end
   end
   next_cell()
+end
+
+---Send all cells in order (wrapper structure is skipped; run_all_delay > 0 sends cell by cell)
+function M.send_all()
+  local texts = require("rslime.cells").all_cell_texts(
+    vim.api.nvim_get_current_buf(), cfg.cell_delimiter)
+  if #texts == 0 then
+    vim.notify("rslime: no cells in buffer", vim.log.levels.WARN)
+    return
+  end
+  run_cell_texts(texts)
+end
+
+---Run every cell strictly before the cursor's cell — re-run the setup part only
+function M.send_before()
+  local texts = require("rslime.cells").cell_texts_before(
+    vim.api.nvim_get_current_buf(), vim.fn.line("."), cfg.cell_delimiter)
+  if #texts == 0 then
+    vim.notify("rslime: no cells before cursor", vim.log.levels.WARN)
+    return
+  end
+  run_cell_texts(texts)
+end
+
+---Run the cursor's cell and every cell after it
+function M.send_after()
+  local texts = require("rslime.cells").cell_texts_after(
+    vim.api.nvim_get_current_buf(), vim.fn.line("."), cfg.cell_delimiter)
+  if #texts == 0 then
+    vim.notify("rslime: no cells from cursor", vim.log.levels.WARN)
+    return
+  end
+  run_cell_texts(texts)
 end
 
 ---Restart the kernel: .q → gSystem->Exit(0) → jobstop
@@ -236,5 +264,10 @@ function M.http_server(port)
 end
 
 function M.is_running() return is_running() end
+
+---Channel accessors for the RPC layer
+function M.job_id() return state.job_id end
+
+function M.bufnr() return state.bufnr and (vim.api.nvim_buf_is_valid(state.bufnr) and state.bufnr or nil) or nil end
 
 return M

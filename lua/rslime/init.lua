@@ -10,10 +10,14 @@ local defaults = {
   run_all_delay = 0,   -- >0: send cells one by one with this delay (ms)
   http_port = 8080,
   http_open = true,    -- open the browser after starting THttpServer
+  completion = false,  -- off by default: LSP covers most of it; the live source only adds
+                       -- REPL-session symbols (objects made interactively, .L, autoload)
   -- mappings are prefix + keys.<action>; prefix = nil registers no mappings
   -- global: start/toggle/restart/quit/focus/http; c/cpp buffers: cell/line/visual/file/undo/run_all
   -- set a suffix to false to disable that mapping
   prefix = nil,
+  short_desc = false,   -- true: short which-key descriptions ("rslime before" instead of
+                        -- "rslime run cells before cursor")
   keys = {
     start = "s",
     toggle = "1",
@@ -27,6 +31,10 @@ local defaults = {
     file = "F",
     undo = "u",
     run_all = "a",
+    run_before = "B",   -- cells strictly before the cursor's cell
+    run_after = "A",    -- the cursor's cell and everything after
+    eval = "e",         -- eval word (n) / selection (x) in the live session
+    vars = "v",         -- session variable panel
   },
 }
 
@@ -60,7 +68,7 @@ function M.setup(opts)
     -- ft lazy-loading: the FileType event has already fired, register on the current c/cpp buffer
     local ft = vim.bo.filetype
     if ft == "c" or ft == "cpp" then
-      keymaps.apply_to_buf(vim.api.nvim_get_current_buf(), M.config.prefix, M.config.keys)
+      keymaps.apply_to_buf(vim.api.nvim_get_current_buf(), M.config.prefix, M.config.keys, M.config.short_desc)
     end
   end
   return M.config
