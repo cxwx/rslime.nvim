@@ -19,7 +19,7 @@ end
 -- headless 默认列宽太窄会把应答行折行，加宽
 vim.o.columns = 200
 
-require("rslime").setup { prefix = nil, completion = true, diagnostics = true }
+require("rslime").setup { prefix = nil, completion = true, diagnostics = true, inline_eval = true }
 local repl = require("rslime.repl")
 local rpc = require("rslime.rpc")
 
@@ -137,7 +137,22 @@ vim.defer_fn(function()
                             and (joined:find("fN", 1, true) or joined:find("fEntries", 1, true)) ~= nil
                             and #hl > 5
                           say(("hover p -> %d lines, dump=%s"):format(#hl, tostring(okh)))
-                          finish(ok and ok3 and #c4 >= 3 and oke and okb and okv and oks and okd and okr and okh)
+
+                          -- eval inline: 短结果 -> 行尾 virt text（不弹浮窗）
+                          local ibuf = vim.api.nvim_create_buf(false, true)
+                          vim.api.nvim_buf_set_lines(ibuf, 0, -1, false,
+                            { 'TH1F hist("h", "t", 100, 0, 10);' })
+                          vim.api.nvim_set_current_buf(ibuf)
+                          vim.api.nvim_win_set_cursor(0, { 1, 5 })  -- 光标落在 hist 上
+                          require("rslime.inspect").eval_cursor()
+                          vim.defer_fn(function()
+                            local ins = vim.api.nvim_create_namespace("rslime.inline")
+                            local ms = vim.api.nvim_buf_get_extmarks(ibuf, ins, 0, -1, {})
+                            local oki = #ms >= 1
+                            say(("inline -> %d marks, hist=%s"):format(#ms, tostring(oki)))
+                            finish(ok and ok3 and #c4 >= 3 and oke and okb and okv and oks
+                              and okd and okr and okh and oki)
+                          end, 3000)
                         end)
                       end, 8000)
                     end)

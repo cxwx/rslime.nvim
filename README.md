@@ -30,6 +30,7 @@ Neovim plugin dependencies: none.
 - **Variable panel**: `,r0v` lists every global in the session with its type; pick one to evaluate it — the notebook "variables view", ROOT edition
 - **Signatures & docs**: `,r0S` on `hist.Draw(` / `TH1F::Fill` floats every overload prototype at once, plus the class-guide doc string from the reflection dictionary when available
 - **Error marking** *(opt-in)*: cling errors from a sent cell are marked back onto the source cell as diagnostics — `input_line` locations are mapped through the cell range
+- **Inline eval** *(opt-in)*: short results land as virtual text at the end of the line instead of a float; long results still float, `:RslimeInlineClear` wipes the marks
 - **Session replay**: `,r0p` re-sends every block you've sent this session (cells, lines, selections), in order — after a kernel restart, one key rebuilds the session; works across files
 - **Live hover** (dap-style panel): `,r0K` (its own key — your `K` / LSP hover stays untouched) evaluates the word under the cursor in the session; pointers are followed by `Dump()`, so you see data members with their current values (`fNcells 102 …`), not just an address; non-TObject classes fall back to `Print()`. The result opens as a persistent, focused `rslime-dump` panel with syntax-highlighted member/value/comment columns: `q`/`<Esc>` closes, `r` re-reads live memory, `<CR>`/double-click steps into a member object (`fXaxis ->…` → dump of the axis)
 - **`rootrepl` filetype**: the REPL terminal buffer gets its own filetype (daprepl-style) — ftplugin ships an in-REPL `<C-c>` interrupt and a `C-x C-o` omnifunc; with blink.cmp, `per_filetype = { rootrepl = { "rslime" } }` gives live-session completion *inside* the REPL window
@@ -77,6 +78,7 @@ require("rslime").setup({
   http_open = true,                -- open the browser after starting THttpServer
   completion = false,              -- opt-in: live-session completion (see below)
   diagnostics = false,             -- opt-in: mark cling errors back onto the sent cell
+  inline_eval = false,             -- opt-in: short eval results as virtual text at the line end
   short_desc = false,              -- true: compact which-key labels ("󰖯 before" instead of
                                    --       "rslime run cells before cursor"); needs a Nerd Font
   prefix = nil,                    -- nil registers no mappings
@@ -160,6 +162,7 @@ Notes:
 | `RslimeReplay` | Re-send all blocks recorded this session, in order |
 | `RslimeHover` | Live-session hover (Dump) on the word under the cursor |
 | `RslimeUndo [n]` | `.undo n` — roll back cling transactions |
+| `RslimeInlineClear` | Wipe the inline eval results in the buffer |
 
 Menus/pickers: the table above is code — `require("rslime.commands").menu()` returns `{ display, cmd, desc }` items, and `.all()` the full definitions (`range`, `nargs`, `run`). The `:Rslime*` commands themselves are registered from that same table. For a grouped view (e.g. [nvzone/menu](https://github.com/nvzone-menu)): `require("menu").open(require("rslime.menu").nvzone(), { mouse = true })` — 4 groups (session / send / run / inspect), one entry per command.
 

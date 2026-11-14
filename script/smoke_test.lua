@@ -112,4 +112,20 @@ history.record("auto b = 2;")
 local h = history.get()
 assert(#h == 2 and h[1] == "auto a = 1;" and h[2] == "auto b = 2;")
 
+-- inline: 短结果判定 + 行尾 virt text 置/换/清
+local inline = require("rslime.inline")
+assert(inline.is_short({ "(double) 0.5" }))
+assert(inline.is_short({ string.rep("x", 80) }))
+assert(not inline.is_short(nil))
+assert(not inline.is_short({ "a", "b" }))
+assert(not inline.is_short({ string.rep("x", 81) }))
+local ibuf = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { "h->GetMean();", "second" })
+assert(inline.show(ibuf, 1, "  (double) 0.5000000"))
+assert(inline.show(ibuf, 1, "(double) 0.6000000"))  -- 同行重求值 -> 替换
+local ins = vim.api.nvim_create_namespace("rslime.inline")
+assert(#vim.api.nvim_buf_get_extmarks(ibuf, ins, 0, -1, {}) == 1, "one mark per line")
+inline.clear(ibuf)
+assert(#vim.api.nvim_buf_get_extmarks(ibuf, ins, 0, -1, {}) == 0, "clear wipes")
+assert(not inline.show(ibuf, 99, "out of range"))  -- 越界 -> false -> 调用方回退浮窗
 print("smoke_test OK")

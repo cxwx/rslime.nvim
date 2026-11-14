@@ -4,6 +4,7 @@
 local M = {}
 local repl = require("rslime.repl")
 local rpc = require("rslime.rpc")
+local inline = require("rslime.inline")
 
 local function show(lines, title)
   if not lines or #lines == 0 then lines = { "(no output / timeout)" } end
@@ -59,11 +60,17 @@ local function running()
   return false
 end
 
----Evaluate a raw expression string in the live session, float the result
-function M.eval_expr(expr)
+---Evaluate a raw expression string in the live session, float the result.
+---@param at table? { buf, lnum } inline target: with cfg.inline_eval a short
+---result lands as eol virtual text on that line; anything else still floats
+function M.eval_expr(expr, at)
   if not expr or expr == "" then return end
   if not running() then return end
   rpc.request_expr(expr, function(lines)
+    if at and require("rslime").config.inline_eval
+      and inline.is_short(lines) and inline.show(at.buf, at.lnum, lines[1]) then
+      return
+    end
     show(lines, expr)
   end)
 end
@@ -75,13 +82,14 @@ function M.eval_cursor()
     vim.notify("rslime: no identifier under cursor", vim.log.levels.WARN)
     return
   end
-  M.eval_expr(word)
+  M.eval_expr(word, { buf = vim.api.nvim_get_current_buf(), lnum = vim.fn.line(".") })
 end
 
 ---Visual selection (joined to one line)
 function M.eval_visual()
   local lines = vim.api.nvim_buf_get_lines(0, vim.fn.line("'<") - 1, vim.fn.line("'>"), false)
-  M.eval_expr(vim.trim(table.concat(lines, " ")))
+  M.eval_expr(vim.trim(table.concat(lines, " ")),
+    { buf = vim.api.nvim_get_current_buf(), lnum = vim.fn.line("'>") })
 end
 
 ---Session hover for one word: eval it; pointer/object results are followed by

@@ -17,6 +17,7 @@ local buf_actions = {
   { "n", "vars", "RslimeVars", "session variables", "󰬹 vars" },
   { "n", "replay", "RslimeReplay", "replay session history", "󰒋 replay" },
   { "n", "hover", "RslimeHover", "live hover (Dump)", "󰡎 hover" },
+  { "n", "inline_clear", "RslimeInlineClear", "clear inline evals", "󰡎 clear" },
   { "x", "visual", nil, "send selection", "󰅩 visual" }, -- range command handled separately
 }
 

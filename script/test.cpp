@@ -14,6 +14,8 @@ void p1() {
   // %% 01 create a histogram (basic object creation)
   auto h = new TH1F("h", "gaus test", 100, -5, 5);
   std::cout << "histogram created" << std::endl;
+  double c = 3;
+  auto d = c + 4;
 
   // %% 02 fill data (multi-line block sent as a whole)
   TRandom3 rng(42);

@@ -18,7 +18,7 @@
 - [x] **面板专属 filetype `rslime-dump`（dapui 式）**：syntax 高亮三列结构；ftplugin 键位 `q`/`<Esc>` 关、`r` 刷新为最新内存值、`<CR>`/双击 step-into 成员对象 ✅ 已完成
 - [x] **REPL 缓冲区 filetype = `rootrepl`（daprepl 式）**：ftplugin 挂 REPL 内 `<C-c>` 中断 + omnifunc 后备；blink `per_filetype = { rootrepl = { "rslime" } }` 实现 REPL 终端内活会话补全（一并完成） ✅ 已完成
 - [ ] **签名自动触发**：`(` 后自动弹签名（接入 blink signature），替代手动 `,r0S`
-- [ ] **eval inline**：短结果（`(double) 0.5` 级别）以 virtual text 显示在行尾，可开关；长结果仍走浮窗
+- [x] **eval inline**：短结果（`(double) 0.5` 级别）以 virtual text 显示在行尾（`inline_eval = true` 开启，`,r0x` 清除）；长结果仍走浮窗 ✅ 已完成
 - [ ] **`.L`/`.x` 路径补全**：meta 命令后补全文件路径（helper 侧已有文件枚举的反射 API）
 - [ ] **THttpServer 面板**：不只开浏览器——列会话里的 canvas/对象，点选即在浏览器定位（THttpServer 的 item URI）
 

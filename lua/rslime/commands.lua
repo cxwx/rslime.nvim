@@ -29,6 +29,7 @@ function M.all()
     { cmd = "RslimeSign",         desc = "overload prototypes + docs",           run = function() inspect.show_signatures() end },
     { cmd = "RslimeHover",        desc = "live hover panel (Dump)",              run = function() inspect.hover() end },
     { cmd = "RslimeVars",         desc = "session variable panel",               run = function() inspect.show_vars() end },
+    { cmd = "RslimeInlineClear",  desc = "clear inline eval results",            run = function() require("rslime.inline").clear(0) end },
   }
 end
 

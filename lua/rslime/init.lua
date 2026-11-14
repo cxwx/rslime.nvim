@@ -15,6 +15,8 @@ local defaults = {
   completion = false,  -- off by default: LSP covers most of it; the live source only adds
                        -- REPL-session symbols (objects made interactively, .L, autoload)
   diagnostics = false, -- mark cling errors from cell sends back onto the source cell
+  inline_eval = false, -- opt-in: short eval results as virtual text at the line end;
+                       -- long results still float (RslimeInlineClear wipes the marks)
   -- mappings are prefix + keys.<action>; prefix = nil registers no mappings
   -- global: start/toggle/restart/quit/focus/http; c/cpp buffers: cell/line/visual/file/undo/run_all
   -- set a suffix to false to disable that mapping
@@ -41,6 +43,7 @@ local defaults = {
     vars = "v",         -- session variable panel
     replay = "p",       -- re-send everything recorded this session (rebuild a fresh kernel)
     hover = "K",        -- live-session hover (Dump) on the word under the cursor; NOT the K key
+    inline_clear = "x", -- wipe the buffer's inline eval results
   },
 }
 
@@ -56,6 +59,7 @@ function M.setup(opts)
 
   -- cell header highlight (window-local, c/cpp)
   vim.api.nvim_set_hl(0, "RslimeCellHeader", { link = "SpecialComment", default = true })
+  vim.api.nvim_set_hl(0, "RslimeInline", { link = "Special", default = true })
   local group = vim.api.nvim_create_augroup("RslimeHighlight", { clear = true })
   vim.api.nvim_create_autocmd({ "FileType", "BufWinEnter" }, {
     group = group,
