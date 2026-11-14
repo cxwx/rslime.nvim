@@ -150,8 +150,34 @@ vim.defer_fn(function()
                             local ms = vim.api.nvim_buf_get_extmarks(ibuf, ins, 0, -1, {})
                             local oki = #ms >= 1
                             say(("inline -> %d marks, hist=%s"):format(#ms, tostring(oki)))
-                            finish(ok and ok3 and #c4 >= 3 and oke and okb and okv and oks
-                              and okd and okr and okh and oki)
+                            -- run-block inline: 单块运行 -> 块内变量值行尾显示
+                            local cbuf = vim.api.nvim_create_buf(false, true)
+                            vim.api.nvim_buf_set_lines(cbuf, 0, -1, false, {
+                              "// %% setup",
+                              'auto k = new TH1F("k", "t", 10, 0, 1);',
+                              "int m = 7;",
+                            })
+                            vim.api.nvim_set_current_buf(cbuf)
+                            vim.api.nvim_win_set_cursor(0, { 2, 0 })
+                            repl.send_cell()
+                            vim.defer_fn(function()
+                              local cms = vim.api.nvim_buf_get_extmarks(cbuf, ins, 0, -1, {})
+                              local okc = #cms >= 1
+                              local by_row, texts = {}, {}
+                              for _, m in ipairs(cms) do by_row[m[2]] = true end
+                              for _, m in ipairs(cms) do
+                                local d = vim.api.nvim_buf_get_extmark_by_id(cbuf, ins, m[1], { details = true })
+                                local vt = d and d[3] and d[3].virt_text
+                                texts[#texts + 1] = (vt and vt[1] and vt[1][1] or ""):gsub("^%s+", "")
+                              end
+                              local okc = by_row[1] and by_row[2]  -- k 在第2行, m 在第3行 (0基 1/2)
+                                and table.concat(texts, " "):find("TH1F", 1, true) ~= nil
+                                and table.concat(texts, " "):find("(int) 7", 1, true) ~= nil
+                              say(("block inline -> %d marks, k=%s [%s]"):format(
+                                #cms, tostring(okc), table.concat(texts, " | ")))
+                              finish(ok and ok3 and #c4 >= 3 and oke and okb and okv and oks
+                                and okd and okr and okh and oki and okc)
+                            end, 6000)
                           end, 3000)
                         end)
                       end, 8000)

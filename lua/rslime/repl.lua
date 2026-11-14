@@ -128,6 +128,19 @@ function M.send_cell()
   end
   history.record(text)
   M.send(text)
+  -- only a single block re-probes; run all/before/after would churn every mark.
+  -- Deferred: the probe must run AFTER cling finished the block, otherwise the
+  -- variables it declares do not exist yet (the RPC just queues behind the cell).
+  if cfg.run_block_inline and cell then
+    vim.defer_fn(function()
+      if not vim.api.nvim_buf_is_valid(bufnr) then return end
+      require("rslime.probe").run(bufnr, cell, text, function(results)
+        if results and next(results) then
+          require("rslime.inline").refresh(bufnr, results)
+        end
+      end)
+    end, cfg.run_block_inline_delay or 600)
+  end
 end
 
 ---Send the current line

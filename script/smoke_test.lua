@@ -128,4 +128,21 @@ assert(#vim.api.nvim_buf_get_extmarks(ibuf, ins, 0, -1, {}) == 1, "one mark per 
 inline.clear(ibuf)
 assert(#vim.api.nvim_buf_get_extmarks(ibuf, ins, 0, -1, {}) == 0, "clear wipes")
 assert(not inline.show(ibuf, 99, "out of range"))  -- 越界 -> false -> 调用方回退浮窗
+-- probe: 单块变量名抽取
+local probe = require("rslime.probe")
+local pn = probe.names([[auto h = new TH1F("h", "t", 100, 0, 10);
+TH1F hist("x", "t", 10, 0, 1);
+TF1 *f1 = new TF1("f1", "gaus");
+for (int i = 0; i < 10; ++i) h->Fill(i);
+y = 3;]])
+assert(vim.deep_equal(pn, { "h", "hist", "f1", "y" }), vim.inspect(pn))
+
+-- inline.refresh: 全量替换，未出现的行被丢弃；同行值变化 -> Changed 高亮
+local rbuf = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_buf_set_lines(rbuf, 0, -1, false, { "auto h = new TH1F();", "h->Fill();", "h->Draw();" })
+inline.refresh(rbuf, { [1] = "(TH1F *) 0x1", [3] = "void" })
+assert(#vim.api.nvim_buf_get_extmarks(rbuf, ins, 0, -1, {}) == 2, "refresh replaces all")
+inline.refresh(rbuf, { [3] = "void" })
+local ms = vim.api.nvim_buf_get_extmarks(rbuf, ins, 0, -1, { details = true })
+assert(#ms == 1 and ms[1][2] == 2, "only line 3 marked after replace")
 print("smoke_test OK")

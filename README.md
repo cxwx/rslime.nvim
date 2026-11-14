@@ -26,13 +26,14 @@ Neovim plugin dependencies: none.
 - **Cells**: split code into blocks with `// %%` headers and send the one under the cursor; LSP wrapper structure (`#include`, `main()`, …) is skipped automatically and never leaks into the REPL
 - **Run all**: execute every cell in order (optional per-cell delay to watch each block's output)
 - **Run before / after**: run all cells above the cursor (re-run the setup part) or from the cursor down (Jupyter's *Run All Above* / *Run Selected and Below*)
-- **Live eval**: `,r0e` evaluates the word under the cursor (or the visual selection) in the running session and floats the result — hover `hist` and see its live entries/mean. Bad expressions show the compiler error in the float; the session never dies
-- **Variable panel**: `,r0v` lists every global in the session with its type; pick one to evaluate it — the notebook "variables view", ROOT edition
-- **Signatures & docs**: `,r0S` on `hist.Draw(` / `TH1F::Fill` floats every overload prototype at once, plus the class-guide doc string from the reflection dictionary when available
+- **Live eval**: `<leader>r0e` evaluates the word under the cursor (or the visual selection) in the running session and floats the result — hover `hist` and see its live entries/mean. Bad expressions show the compiler error in the float; the session never dies
+- **Variable panel**: `<leader>r0v` lists every global in the session with its type; pick one to evaluate it — the notebook "variables view", ROOT edition
+- **Signatures & docs**: `<leader>r0S` on `hist.Draw(` / `TH1F::Fill` floats every overload prototype at once, plus the class-guide doc string from the reflection dictionary when available
 - **Error marking** *(opt-in)*: cling errors from a sent cell are marked back onto the source cell as diagnostics — `input_line` locations are mapped through the cell range
 - **Inline eval** *(opt-in)*: short results land as virtual text at the end of the line instead of a float; long results still float, `:RslimeInlineClear` wipes the marks
-- **Session replay**: `,r0p` re-sends every block you've sent this session (cells, lines, selections), in order — after a kernel restart, one key rebuilds the session; works across files
-- **Live hover** (dap-style panel): `,r0K` (its own key — your `K` / LSP hover stays untouched) evaluates the word under the cursor in the session; pointers are followed by `Dump()`, so you see data members with their current values (`fNcells 102 …`), not just an address; non-TObject classes fall back to `Print()`. The result opens as a persistent, focused `rslime-dump` panel with syntax-highlighted member/value/comment columns: `q`/`<Esc>` closes, `r` re-reads live memory, `<CR>`/double-click steps into a member object (`fXaxis ->…` → dump of the axis)
+- **Run-block inline** *(on by default)*: running a single block (`:RslimeSendCell`) re-evaluates the variables it declares/assigns and shows their values at the line end — a re-run that produced a different value is highlighted as *changed* (dap-virtual-text style); `run all/before/after` deliberately skip it
+- **Session replay**: `<leader>r0p` re-sends every block you've sent this session (cells, lines, selections), in order — after a kernel restart, one key rebuilds the session; works across files
+- **Live hover** (dap-style panel): `<leader>r0K` (its own key — your `K` / LSP hover stays untouched) evaluates the word under the cursor in the session; pointers are followed by `Dump()`, so you see data members with their current values (`fNcells 102 …`), not just an address; non-TObject classes fall back to `Print()`. The result opens as a persistent, focused `rslime-dump` panel with syntax-highlighted member/value/comment columns: `q`/`<Esc>` closes, `r` re-reads live memory, `<CR>`/double-click steps into a member object (`fXaxis ->…` → dump of the axis)
 - **`rootrepl` filetype**: the REPL terminal buffer gets its own filetype (daprepl-style) — ftplugin ships an in-REPL `<C-c>` interrupt and a `C-x C-o` omnifunc; with blink.cmp, `per_filetype = { rootrepl = { "rslime" } }` gives live-session completion *inside* the REPL window
 - **Kernel restart**: `.q` → `gSystem->Exit(0)` → force kill, three-level fallback; the REPL comes back automatically
 - **Undo**: roll back the last n cling transactions (`:RslimeUndo 3`)
@@ -79,6 +80,8 @@ require("rslime").setup({
   completion = false,              -- opt-in: live-session completion (see below)
   diagnostics = false,             -- opt-in: mark cling errors back onto the sent cell
   inline_eval = false,             -- opt-in: short eval results as virtual text at the line end
+  run_block_inline = true,         -- after running ONE block (send cell), show that block's
+                                   -- variable values inline; run all/before/after skip it
   short_desc = false,              -- true: compact which-key labels ("󰖯 before" instead of
                                    --       "rslime run cells before cursor"); needs a Nerd Font
   prefix = nil,                    -- nil registers no mappings
@@ -134,7 +137,7 @@ require("blink.cmp").setup({
 ```
 
 Notes:
-- Completion queries the session, not the buffer: a variable must be **sent to the REPL first** (`,r0k`); buffer-only locals are LSP's job
+- Completion queries the session, not the buffer: a variable must be **sent to the REPL first** (`<leader>r0k`); buffer-only locals are LSP's job
 - The source disables itself when the REPL isn't running or `completion = false`
 - Restarting the kernel re-injects the helper automatically
 

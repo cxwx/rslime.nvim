@@ -17,6 +17,9 @@ local defaults = {
   diagnostics = false, -- mark cling errors from cell sends back onto the source cell
   inline_eval = false, -- opt-in: short eval results as virtual text at the line end;
                        -- long results still float (RslimeInlineClear wipes the marks)
+  run_block_inline = true, -- after running ONE block (send cell), show its variable
+                           -- values as eol virtual text; run all/before/after skip it
+  run_block_inline_delay = 600, -- ms to wait after sending before probing (let cling finish)
   -- mappings are prefix + keys.<action>; prefix = nil registers no mappings
   -- global: start/toggle/restart/quit/focus/http; c/cpp buffers: cell/line/visual/file/undo/run_all
   -- set a suffix to false to disable that mapping
@@ -60,6 +63,7 @@ function M.setup(opts)
   -- cell header highlight (window-local, c/cpp)
   vim.api.nvim_set_hl(0, "RslimeCellHeader", { link = "SpecialComment", default = true })
   vim.api.nvim_set_hl(0, "RslimeInline", { link = "Special", default = true })
+  vim.api.nvim_set_hl(0, "RslimeInlineChanged", { link = "DiagnosticVirtualTextWarn", default = true })
   local group = vim.api.nvim_create_augroup("RslimeHighlight", { clear = true })
   vim.api.nvim_create_autocmd({ "FileType", "BufWinEnter" }, {
     group = group,

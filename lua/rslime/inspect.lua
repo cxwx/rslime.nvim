@@ -145,7 +145,7 @@ function M.step_into()
   M.hover_session(expr .. deref .. member)
 end
 
----Live-session hover on the word under the cursor (,r0K).
+---Live-session hover on the word under the cursor (keys.hover, e.g. <leader>r0 K).
 ---Deliberately NOT bound to K — the user's LSP hover keeps that key.
 ---Toggle: an open panel closes instead of re-querying.
 function M.hover()
