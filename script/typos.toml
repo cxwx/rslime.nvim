@@ -1,0 +1,15 @@
+[default]
+extend-ignore-words-re = ['ot']
+
+[default.extend-words]
+noice = "noice"
+whos = "whos"
+rto = "rto"
+Tou = "Tou"
+Enew = "Enew"
+wth = "wth"
+ot = "ot"
+bre = "bre"
+pn = "pn"
+projet = "projet"
+Gaus = "Gaus"

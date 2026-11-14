@@ -22,7 +22,7 @@ local function on_split_opened(bufnr)
   state.winid = vim.fn.bufwinid(bufnr)
 end
 
----启动 ROOT repl
+---Start the ROOT REPL
 function M.start()
   if is_running() then
     vim.notify("rslime: repl already running", vim.log.levels.WARN)
@@ -45,11 +45,11 @@ function M.start()
   on_split_opened(bufnr)
   vim.cmd("wincmd p")
 
-  -- termopen 必须在 REPL buffer 上执行，否则会替换源文件 buffer
+  -- termopen must run on the REPL buffer, otherwise it replaces the source file buffer
   vim.api.nvim_buf_call(bufnr, function()
     vim.fn.termopen(cfg.cmd, {
       cwd = vim.fn.getcwd(),
-      -- term:// 上发 LSP documentHighlight 会被 clangd 拒绝
+      -- LSP documentHighlight on a term:// buffer is rejected by clangd
       on_buf = function()
         vim.b[bufnr].snacks_words = false
       end,
@@ -57,7 +57,7 @@ function M.start()
         state.job_id, state.winid, state.http_started = nil, state.winid, nil
         local buf = state.bufnr
         state.bufnr = nil
-        -- 自动关闭终端 buffer，避免停在 [Process exited 0] 等按键
+        -- auto-close the terminal buffer instead of waiting on [Process exited 0]
         vim.defer_fn(function()
           if buf and vim.api.nvim_buf_is_valid(buf) then
             vim.api.nvim_buf_delete(buf, { force = true })
@@ -79,7 +79,7 @@ function M.start()
   end
 end
 
----向 repl 发送原始文本（含换行）；未运行时先启动再延迟发送
+---Send raw text (with newline); starts the REPL first if not running
 function M.send_raw(text)
   if not is_running() then
     vim.notify("rslime: repl not running, starting...", vim.log.levels.WARN)
@@ -93,12 +93,12 @@ function M.send_raw(text)
   pcall(vim.api.nvim_chan_send, state.job_id, text)
 end
 
----发送代码块（cling 按行求值，多行块整体写入）
+---Send a code block (cling evaluates line by line; multi-line blocks are written as a whole)
 function M.send(code)
   M.send_raw(code .. "\n")
 end
 
----光标所在 cell
+---Send the cell under the cursor
 function M.send_cell()
   local bufnr = vim.api.nvim_get_current_buf()
   local _, text = require("rslime.cells").cell_at(bufnr, vim.fn.line("."), cfg.cell_delimiter)
@@ -109,25 +109,25 @@ function M.send_cell()
   M.send(text)
 end
 
----当前行
+---Send the current line
 function M.send_line()
   M.send(vim.fn.getline("."))
 end
 
----可视选区
+---Send the visual selection
 function M.send_selection()
   local lines = vim.api.nvim_buf_get_lines(
     0, vim.fn.line("'<") - 1, vim.fn.line("'>"), false)
   M.send(table.concat(lines, "\n"))
 end
 
----整个 buffer
+---Send the whole buffer
 function M.send_file()
   local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
   M.send(table.concat(lines, "\n"))
 end
 
----按顺序发送所有 cell（包裹结构自动跳过；run_all_delay > 0 时逐块延迟发送）
+---Send all cells in order (wrapper structure is skipped; run_all_delay > 0 sends cell by cell)
 function M.send_all()
   local texts = require("rslime.cells").all_cell_texts(
     vim.api.nvim_get_current_buf(), cfg.cell_delimiter)
@@ -151,7 +151,7 @@ function M.send_all()
   next_cell()
 end
 
----重启 kernel：.q → gSystem->Exit(0) → jobstop，三级退出
+---Restart the kernel: .q → gSystem->Exit(0) → jobstop
 function M.restart()
   if not is_running() then M.start() return end
   state.restarting = true
@@ -166,7 +166,7 @@ function M.restart()
   end, 2500)
 end
 
----退出 repl（buffer 关闭统一由 on_exit 处理）
+---Quit the REPL (buffer closing is handled by on_exit)
 function M.quit()
   state.restarting = false
   if is_running() then
@@ -177,7 +177,7 @@ function M.quit()
   end
 end
 
----切换显示/隐藏
+---Toggle the REPL window
 function M.toggle()
   if state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr)
     and vim.fn.bufwinid(state.bufnr) ~= -1 then
@@ -197,7 +197,7 @@ function M.toggle()
   end
 end
 
----焦点跳到 repl 窗口（未运行则先启动）
+---Jump to the REPL window (starts it first if not running)
 function M.focus()
   if state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr)
     and vim.fn.bufwinid(state.bufnr) ~= -1 then
@@ -207,12 +207,12 @@ function M.focus()
   end
 end
 
----发送 .undo n 撤销最近 n 条 cling 语句
+---Send `.undo n` to roll back the last n cling transactions
 function M.undo(n)
   M.send_raw(string.format(".undo %d\n", n or 1))
 end
 
----启动 ROOT THttpServer（重启内核后状态复位）
+---Start ROOT's THttpServer (state resets when the kernel restarts)
 function M.http_server(port)
   if state.http_started then
     vim.notify("rslime: THttpServer already started (http://localhost:"

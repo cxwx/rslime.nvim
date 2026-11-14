@@ -4,15 +4,15 @@ local defaults = {
   cmd = "root -l",
   position = "bottom", -- "bottom" | "right"
   width = 80,
-  height = nil,        -- nil = 终端高度一半
-  startup_cmds = {},   -- 启动后发送的 cling 命令
+  height = nil,        -- nil = half the terminal height
+  startup_cmds = {},   -- cling commands sent after startup
   cell_delimiter = "^%s*//%s*%%%%",
-  run_all_delay = 0,   -- >0 时 run all 逐 cell 延迟发送（毫秒）
+  run_all_delay = 0,   -- >0: send cells one by one with this delay (ms)
   http_port = 8080,
-  http_open = true,    -- 启动 THttpServer 后自动打开浏览器
-  -- 按键 = prefix + keys.<action> 拼接；prefix = nil 不注册任何映射
-  -- 全局：start/toggle/restart/quit/focus/http；c/cpp 缓冲区：cell/line/visual/file/undo/run_all
-  -- 某 action 的 suffix 设 false 可单独禁用
+  http_open = true,    -- open the browser after starting THttpServer
+  -- mappings are prefix + keys.<action>; prefix = nil registers no mappings
+  -- global: start/toggle/restart/quit/focus/http; c/cpp buffers: cell/line/visual/file/undo/run_all
+  -- set a suffix to false to disable that mapping
   prefix = nil,
   keys = {
     start = "s",
@@ -40,7 +40,7 @@ function M.setup(opts)
   local repl = require("rslime.repl")
   repl._set_config(M.config)
 
-  -- cell 分隔头高亮（c/cpp 窗口局部）
+  -- cell header highlight (window-local, c/cpp)
   vim.api.nvim_set_hl(0, "RslimeCellHeader", { link = "SpecialComment", default = true })
   local group = vim.api.nvim_create_augroup("RslimeHighlight", { clear = true })
   vim.api.nvim_create_autocmd({ "FileType", "BufWinEnter" }, {
@@ -57,7 +57,7 @@ function M.setup(opts)
   if M.config.prefix then
     local keymaps = require("rslime.keymaps")
     keymaps.apply(M.config)
-    -- ft 懒加载时 FileType 事件已过，给当前 c/cpp 缓冲区补注册
+    -- ft lazy-loading: the FileType event has already fired, register on the current c/cpp buffer
     local ft = vim.bo.filetype
     if ft == "c" or ft == "cpp" then
       keymaps.apply_to_buf(vim.api.nvim_get_current_buf(), M.config.prefix, M.config.keys)

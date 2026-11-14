@@ -8,10 +8,10 @@ local buf_actions = {
   { "n", "file", "RslimeSendFile", "send file" },
   { "n", "undo", "RslimeUndo", "cling undo" },
   { "n", "run_all", "RslimeRunAll", "run all cells" },
-  { "x", "visual", nil, "send selection" }, -- 选区命令单独处理（range）
+  { "x", "visual", nil, "send selection" }, -- range command handled separately
 }
 
----给单个缓冲区注册发送类映射（suffix 为 false 不注册；"" 也合法）
+---Register send mappings on a single buffer (suffix false disables; "" is a valid empty suffix)
 ---@param bufnr integer
 ---@param prefix string
 ---@param keys table
@@ -28,10 +28,10 @@ function M.apply_to_buf(bufnr, prefix, keys)
   end
 end
 
----按键映射：prefix + keys.<action> 拼接
----全局：start/toggle/restart/quit/focus；c/cpp 缓冲区：cell/line/visual/file/undo
----suffix 为 false 的 action 不注册；"" 表示空 suffix（prefix 单按即触发）
----@param cfg table 完整配置（含 prefix, keys）
+---Mappings are prefix + keys.<action>
+---global: start/toggle/restart/quit/focus/http; c/cpp buffers: cell/line/visual/file/undo/run_all
+---a suffix of false disables the action; "" means an empty suffix (prefix alone triggers)
+---@param cfg table full config (prefix, keys)
 function M.apply(cfg)
   local prefix = cfg.prefix
   local keys = cfg.keys or {}
@@ -52,7 +52,7 @@ function M.apply(cfg)
     end
   end
 
-  -- 发送类映射只挂在 c/cpp 缓冲区
+  -- send mappings are buffer-local to c/cpp files
   local augroup = vim.api.nvim_create_augroup("RslimeKeymaps", { clear = true })
   vim.api.nvim_create_autocmd("FileType", {
     group = augroup,

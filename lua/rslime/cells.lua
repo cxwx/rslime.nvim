@@ -1,9 +1,9 @@
 local M = {}
 
----解析缓冲区中的 jupyter 风格 cell 分块
----返回 cell 列表：{ start = 起始代码行, stop = 结束代码行, header = 头行文本 }
+---Parse jupyter-style cells in a buffer
+---Returns a list: { start = first code line, stop = last code line, header = header line }
 ---@param bufnr integer
----@param delimiter string lua pattern，如 "^%s*//%s*%%%%"
+---@param delimiter string lua pattern, e.g. "^%s*//%s*%%%%"
 ---@return table[] cells
 function M.parse(bufnr, delimiter)
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
@@ -23,8 +23,8 @@ function M.parse(bufnr, delimiter)
     table.insert(cells, cur)
   end
 
-  -- 最后一个 cell 不延伸到文件末尾：末尾包裹结构的孤立 `}`（深度为负）排除出 cell
-  -- cell 自身合法闭合的块（如 for 循环的 `}`）深度为 0，不受影响
+  -- the last cell must not reach EOF: a dangling closing `}` from the wrapper
+  -- (negative brace depth) is excluded; properly closed blocks (depth 0) stay intact
   local last = cells[#cells]
   if last then
     local depth = 0
@@ -53,7 +53,7 @@ function M.parse(bufnr, delimiter)
   return out
 end
 
----光标所在 cell（光标落在头行上也归属该 cell）
+---Cell under the cursor (a header line belongs to its own cell)
 ---@param bufnr integer
 ---@param lnum integer
 ---@param delimiter string
@@ -64,10 +64,10 @@ function M.cell_at(bufnr, lnum, delimiter)
   for i, c in ipairs(cells) do
     if lnum <= c.stop then
       if lnum < c.start then
-        -- 光标在上一 cell 末尾与本 cell 代码之间：头行则归属本 cell
+        -- cursor between the previous cell and this cell's code: a header line belongs to this cell
         local header = vim.api.nvim_buf_get_lines(bufnr, lnum - 1, lnum, false)[1]
         if header and header:match(delimiter) then
-          -- 归属本 cell
+          -- belongs to this cell
         elseif i > 1 then
           c = cells[i - 1]
         else
@@ -86,7 +86,7 @@ function M.cell_at(bufnr, lnum, delimiter)
   return nil, nil
 end
 
----所有 cell 文本（按顺序）
+---All cell texts in order
 ---@param bufnr integer
 ---@param delimiter string
 ---@return string[]
