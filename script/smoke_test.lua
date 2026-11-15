@@ -145,6 +145,13 @@ assert(#vim.api.nvim_buf_get_extmarks(rbuf, ins, 0, -1, {}) == 2, "refresh repla
 inline.refresh(rbuf, { [3] = "void" })
 local ms = vim.api.nvim_buf_get_extmarks(rbuf, ins, 0, -1, { details = true })
 assert(#ms == 1 and ms[1][2] == 2, "only line 3 marked after replace")
+-- 值没变 -> 普通高亮; 值变了 -> Changed 高亮
+inline.refresh(rbuf, { [3] = "void" })
+local d = vim.api.nvim_buf_get_extmarks(rbuf, ins, 0, -1, { details = true })[1][4]
+assert(d.virt_text[1][2] == "RslimeInline", "same value keeps plain highlight")
+inline.refresh(rbuf, { [3] = "void*" })
+d = vim.api.nvim_buf_get_extmarks(rbuf, ins, 0, -1, { details = true })[1][4]
+assert(d.virt_text[1][2] == "RslimeInlineChanged", "changed value gets Changed highlight")
 -- signature: 调用头解析 + 参数计数（0 基）
 local sig = require("rslime.signature")
 local h1, p1 = sig._parse_context("h->Fill(", 8)          assert(h1 == "h->Fill" and p1 == 0, vim.inspect({h1, p1}))

@@ -21,6 +21,21 @@
 - [x] **eval inline**：短结果（`(double) 0.5` 级别）以 virtual text 显示在行尾（`inline_eval = true` 开启，`<leader>r0x` 清除）；长结果仍走浮窗 ✅ 已完成
 - [x] **run block inline**：单块运行后自动求值该块的变量并显示（`run_block_inline`，默认开）；值变化时 Changed 高亮；run all/before/after 不触发 ✅ 已完成
 - [x] **会话画图**：`<leader>r0d` 光标对象类型感知 `Draw()`（eval 拿类名 → 反射查 Draw 重载：无参直画 / TTree 弹参数输入 / 无 Draw 提前 notify；指针 `->` 对象 `.`；补 `Modified+Update` 同事务推送 web canvas），`<leader>r0D` 叠加 same，`:RslimeDraw COLZ` 传 option；replay 连画一起重放 ✅ 已完成
+- [x] **README 功能演示 GIF**：asciinema + agg + tmux 真实 ROOT 会话录制（send / completion / signature / hover 四张，逐帧 QC）✅ 已完成
+
+## 修过的坑（复盘留档）
+
+- [x] **补全冷启动必超时**：`rpc.request` 默认 800ms，冷会话第一次反射查询（cling 加载类表）远超它 → 补全静默空。补全请求改为 4000ms（`complete.lua`）
+- [x] **run-block inline 丢 Changed 高亮**：`refresh` 硬编码 `changed=false`，且 `place()` 内部的 `clear_line` 把循环里刚 set 的 `last_text` 条目又删了（refresh 之后缓存是空的，对比永远失败）。两处都修了，smoke 补了同值/变值两条断言
+- [x] **`last_text` 随 buffer 泄漏**：key 是 `buf:lnum`，buffer 删除后残留。`BufUnload` autocmd 清理（首次使用时注册）
+
+## 下一炉
+
+- [ ] **冷会话预热**：REPL 启动注入 helper 后顺手发一个廉价反射查询（如 `rslime_rpc` 查 `TObject`），把 cling 类表加载提前 —— 补全/签名首次触发的秒级延迟就没了（`complete.lua` 已把超时放宽到 4s，预热是把延迟本身消掉）
+- [ ] **diag.capture 用 sentinel 代替固定 1800ms**：现在 cell 发送后盲等 1800ms 再扫 REPL 输出；长编译 cell 的错误可能还没出现，短 cell 又白等。已有 `rslime_mark` E 机制，等 E 到达再解析即可
+- [ ] **probe 超时回传部分结果**：run-block inline 某个变量求值超时会把整个结果丢弃（`cb(nil)`）；已求到的变量其实可以先显示
+- [ ] **probe 与用户操作抢单通道**：probe 串行求值期间用户做了 eval/hover/补全，probe 的请求被 supersede，变量静默缺失。可接受（再跑一次就好），要更稳就得给通道加请求队列
+- [ ] **`probe.names` 误抓函数定义**：`void f(...) {` 会匹配 `Type name(` 模式被当变量探针；eval 结果是函数地址（通常超宽被过滤），无实际危害，但按住"声明/赋值"语义收紧模式更干净
 
 ## 不画的饼（想清楚了，不做）
 

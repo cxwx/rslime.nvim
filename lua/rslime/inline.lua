@@ -19,7 +19,25 @@ end
 -- gets the Changed colour (borrowed from nvim-dap-virtual-text's NvimDapVirtualTextChanged)
 local last_text = {}
 
+-- buffers get wiped all the time; drop their last_text entries on unload
+-- (registered on first use, not at require time — tests load this module raw)
+local cleanup_registered = false
+local function ensure_cleanup()
+  if cleanup_registered then return end
+  cleanup_registered = true
+  vim.api.nvim_create_autocmd("BufUnload", {
+    group = vim.api.nvim_create_augroup("RslimeInlineCleanup", { clear = true }),
+    callback = function(args)
+      local prefix = args.buf .. ":"
+      for k in pairs(last_text) do
+        if k:sub(1, #prefix) == prefix then last_text[k] = nil end
+      end
+    end,
+  })
+end
+
 local function place(buf, lnum, text, changed)
+  ensure_cleanup()
   M.clear_line(buf, lnum)
   local hl = changed and "RslimeInlineChanged" or "RslimeInline"
   vim.api.nvim_buf_set_extmark(buf, ns, lnum - 1, 0, {
@@ -43,19 +61,25 @@ end
 
 ---Replace every mark in the buffer in one go (a re-run must not leave stale
 ---lines behind). `results` = { [lnum] = text }; marks absent from it are dropped.
+---A line whose value changed since the last render gets the Changed colour.
 ---@param bufnr integer
 ---@param results table<integer, string>
 function M.refresh(bufnr, results)
   local buf = bufnr or 0
   if not vim.api.nvim_buf_is_valid(buf) then return end
   local prefix = buf .. ":"
-  for k in pairs(last_text) do
-    if k:sub(1, #prefix) == prefix then last_text[k] = nil end
+  local prev = {}
+  for k, v in pairs(last_text) do
+    if k:sub(1, #prefix) == prefix then
+      prev[k:sub(#prefix + 1)] = v
+      last_text[k] = nil
+    end
   end
   M.clear(buf)
   for lnum, text in pairs(results) do
+    -- place() clears last_text for the line, so record after placing
+    place(buf, lnum, text, prev[tostring(lnum)] ~= nil and prev[tostring(lnum)] ~= text)
     last_text[prefix .. lnum] = text
-    place(buf, lnum, text, false)
   end
 end
 
