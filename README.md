@@ -24,6 +24,8 @@ Neovim plugin dependencies: none.
 ## Features
 
 - **Cells**: split code into blocks with `// %%` headers and send the one under the cursor; LSP wrapper structure (`#include`, `main()`, …) is skipped automatically and never leaks into the REPL
+
+  ![send a cell](assets/feat_send.gif)
 - **Run all**: execute every cell in order (optional per-cell delay to watch each block's output)
 - **Run before / after**: run all cells above the cursor (re-run the setup part) or from the cursor down (Jupyter's *Run All Above* / *Run Selected and Below*)
 - **Live eval**: `<leader>r0e` evaluates the word under the cursor (or the visual selection) in the running session and floats the result — hover `hist` and see its live entries/mean. Bad expressions show the compiler error in the float; the session never dies
@@ -32,15 +34,21 @@ Neovim plugin dependencies: none.
 - **Error marking** *(opt-in)*: cling errors from a sent cell are marked back onto the source cell as diagnostics — `input_line` locations are mapped through the cell range
 - **Inline eval** *(opt-in)*: short results land as virtual text at the end of the line instead of a float; long results still float, `:RslimeInlineClear` wipes the marks
 - **Auto signatures** *(opt-in)*: typing `(` shows the live session's overload prototypes via the blink signature provider — LSP answers for buffer-known symbols, this source abstains (returns nil) unless the symbol exists in the session, so it only ever fills the gap LSP structurally cannot (`hist` built two cells ago, `.L`-loaded functions)
+
+  ![auto signature](assets/feat_signature.gif)
 - **Session draw**: `<leader>r0d` draws the word under the cursor in the live session — type-aware via the eval + reflection round-trip (stack objects get `.`, pointers `->`; `TTree` prompts for a draw expression; classes without `Draw` are rejected up front), then `Modified()+Update()` in the same cling transaction so the web canvas pops up in the browser. `<leader>r0D` overlays with `same`, `:RslimeDraw COLZ` passes any option; replay redraws with the session
 - **Run-block inline** *(on by default)*: running a single block (`:RslimeSendCell`) re-evaluates the variables it declares/assigns and shows their values at the line end — a re-run that produced a different value is highlighted as *changed* (dap-virtual-text style); `run all/before/after` deliberately skip it
 - **Session replay**: `<leader>r0p` re-sends every block you've sent this session (cells, lines, selections), in order — after a kernel restart, one key rebuilds the session; works across files
 - **Live hover** (dap-style panel): `<leader>r0K` (its own key — your `K` / LSP hover stays untouched) evaluates the word under the cursor in the session; pointers are followed by `Dump()`, so you see data members with their current values (`fNcells 102 …`), not just an address; non-TObject classes fall back to `Print()`. The result opens as a persistent, focused `rslime-dump` panel with syntax-highlighted member/value/comment columns: `q`/`<Esc>` closes, `r` re-reads live memory, `<CR>`/double-click steps into a member object (`fXaxis ->…` → dump of the axis)
+
+  ![live hover panel](assets/feat_hover.gif)
 - **`rootrepl` filetype**: the REPL terminal buffer gets its own filetype (daprepl-style) — ftplugin ships an in-REPL `<C-c>` interrupt and a `C-x C-o` omnifunc; with blink.cmp, `per_filetype = { rootrepl = { "rslime" } }` gives live-session completion *inside* the REPL window
 - **Kernel restart**: `.q` → `gSystem->Exit(0)` → force kill, three-level fallback; the REPL comes back automatically
 - **Undo**: roll back the last n cling transactions (`:RslimeUndo 3`)
 - **THttpServer**: one key to start it and open the browser — inspect variables and canvases from the background
 - **Live-session completion** *(opt-in, off by default — LSP covers most of it)*: a [blink.cmp](https://github.com/Saghen/blink.cmp) source backed by the running REPL, for the one thing LSP can't do: symbols that only exist in the session — objects created interactively, `.L`-loaded functions, autoloaded classes
+
+  ![live-session completion](assets/feat_completion.gif)
 - **Clean exit**: the terminal buffer closes itself when the REPL exits; never stuck on `[Process exited 0]`
 
 ## Installation

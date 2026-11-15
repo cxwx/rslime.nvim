@@ -34,6 +34,7 @@ function M.complete_line(before, cb)
       or before:find("[_a-zA-Z][_a-zA-Z0-9]*$")) then
     return cb({})
   end
+  -- 冷会话第一次反射查询要加载 cling 类表, 默认 800ms 不够
   require("rslime.rpc").request(before, function(lines)
     local items = {}
     local seen = {}
@@ -49,7 +50,7 @@ function M.complete_line(before, cb)
       end
     end
     cb(items)
-  end)
+  end, 4000)
 end
 
 function M:get_completions(context, callback)
