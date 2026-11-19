@@ -94,6 +94,8 @@ require("rslime").setup({
   short_desc = false,              -- true: compact which-key labels ("󰖯 before" instead of
                                    --       "rslime run cells before cursor"); needs a Nerd Font
   prefix = nil,                    -- nil registers no mappings
+  filetypes = nil,                 -- send-mapping scope: nil = global mappings (no autocmd);
+                                   -- "cpp" / { "c", "cpp" } = buffer-local in those filetypes
   keys = {                         -- mapping = prefix + suffix
     start = "s", toggle = "1", restart = "R", quit = "q", focus = "f",
     http = "h",
@@ -112,7 +114,7 @@ require("rslime").setup({
 })
 ```
 
-Mapping rules: `start/toggle/restart/quit/focus/http` are global; everything else (`cell/line/visual/file/undo/run_all/run_before/run_after/eval/sign/vars/replay/hover/inline_clear/draw/draw_same`) is buffer-local to c/cpp files. Set any suffix to `false` to disable it. `short_desc = true` swaps the verbose which-key labels for compact `"󰖯 before"`-style ones (Nerd Font required).
+Mapping rules: `start/toggle/restart/quit/focus/http` are global; everything else (`cell/line/visual/file/undo/run_all/run_before/run_after/eval/sign/vars/replay/hover/inline_clear/draw/draw_same`) follows `filetypes`: `nil` (default) sets the mappings globally in one shot (no autocmd), while a string or list (`{ "c", "cpp" }`) makes them buffer-local, registered per `FileType`. The prefix alone is mapped to a no-op labeled `rslime` so which-key pops the group open (an action with a `""` suffix overrides it). Set any suffix to `false` to disable it. `short_desc = true` swaps the verbose which-key labels for compact `"󰖯 before"`-style ones (Nerd Font required).
 
 ## Live-session completion (opt-in)
 

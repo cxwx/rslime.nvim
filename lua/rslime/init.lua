@@ -23,9 +23,11 @@ local defaults = {
                            -- values as eol virtual text; run all/before/after skip it
   run_block_inline_delay = 600, -- ms to wait after sending before probing (let cling finish)
   -- mappings are prefix + keys.<action>; prefix = nil registers no mappings
-  -- global: start/toggle/restart/quit/focus/http; c/cpp buffers: cell/line/visual/file/undo/run_all
+  -- global: start/toggle/restart/quit/focus/http; send mappings follow filetypes:
+  -- nil = global mappings (no autocmd); { "c", "cpp" } = buffer-local via FileType
   -- set a suffix to false to disable that mapping
   prefix = nil,
+  filetypes = nil,     -- send-mapping scope: nil = global; a string or list = only those filetypes
   short_desc = false,   -- true: short which-key descriptions ("rslime before" instead of
                         -- "rslime run cells before cursor")
   keys = {
@@ -83,9 +85,9 @@ function M.setup(opts)
   if M.config.prefix then
     local keymaps = require("rslime.keymaps")
     keymaps.apply(M.config)
-    -- ft lazy-loading: the FileType event has already fired, register on the current c/cpp buffer
-    local ft = vim.bo.filetype
-    if ft == "c" or ft == "cpp" then
+    -- ft lazy-loading: with filetypes set, the FileType event has already fired for this
+    -- buffer — register on it when its filetype matches (nil filetypes = already set globally)
+    if M.config.filetypes and keymaps.ft_enabled(vim.bo.filetype, M.config.filetypes) then
       keymaps.apply_to_buf(vim.api.nvim_get_current_buf(), M.config.prefix, M.config.keys, M.config.short_desc, M.config)
     end
   end

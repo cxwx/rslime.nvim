@@ -23,8 +23,8 @@ local buf_actions = {
   { "x", "visual", nil, "send selection", "󰅩 visual" }, -- range command handled separately
 }
 
----Register send mappings on a single buffer (suffix false disables; "" is a valid empty suffix)
----@param bufnr integer
+---Register send mappings (suffix false disables; "" is a valid empty suffix)
+---@param bufnr integer|nil buffer-local when set; nil = global mappings
 ---@param prefix string
 ---@param keys table
 ---@param short boolean? short which-key descriptions (icon + word, no "rslime " prefix)
@@ -49,13 +49,27 @@ function M.apply_to_buf(bufnr, prefix, keys, short, opts)
   end
 end
 
+---send-mapping scope (cfg.filetypes): a string / list of strings = only those filetypes
+---@param ft string current 'filetype'
+---@param filetypes string|table
+---@return boolean
+function M.ft_enabled(ft, filetypes)
+  if type(filetypes) == "string" then return ft == filetypes end
+  return vim.tbl_contains(filetypes, ft)
+end
+
 ---Mappings are prefix + keys.<action>
----global: start/toggle/restart/quit/focus/http; c/cpp buffers: cell/line/visual/file/undo/run_all
+---start/toggle/restart/quit/focus/http are global; send mappings follow cfg.filetypes:
+---nil = set globally in one shot (no autocmd), a string/list = buffer-local via FileType
 ---a suffix of false disables the action; "" means an empty suffix (prefix alone triggers)
----@param cfg table full config (prefix, keys)
+---@param cfg table full config (prefix, keys, filetypes)
 function M.apply(cfg)
   local prefix = cfg.prefix
   local keys = cfg.keys or {}
+
+  -- which-key hint: prefix alone is a no-op labeled "rslime", so the group pops open;
+  -- an action with a "" suffix (prefix alone triggers it) overrides this below
+  vim.keymap.set("n", prefix, "", { silent = true, desc = "rslime" })
 
   -- global: action -> { command, long desc, short desc }
   local global_actions = {
@@ -74,16 +88,21 @@ function M.apply(cfg)
     end
   end
 
-  -- send mappings are buffer-local to c/cpp files
+  -- send mappings: filetypes nil = global one-shot set (no event overhead);
+  -- a string/list = buffer-local, registered per FileType
   local short = cfg.short_desc
   local augroup = vim.api.nvim_create_augroup("RslimeKeymaps", { clear = true })
-  vim.api.nvim_create_autocmd("FileType", {
-    group = augroup,
-    pattern = { "c", "cpp" },
-    callback = function(args)
-      M.apply_to_buf(args.buf, prefix, keys, short, cfg)
-    end,
-  })
+  if not cfg.filetypes then
+    M.apply_to_buf(nil, prefix, keys, short, cfg)
+  else
+    vim.api.nvim_create_autocmd("FileType", {
+      group = augroup,
+      pattern = cfg.filetypes,
+      callback = function(args)
+        M.apply_to_buf(args.buf, prefix, keys, short, cfg)
+      end,
+    })
+  end
 end
 
 return M
