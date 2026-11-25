@@ -85,6 +85,8 @@ require("rslime").setup({
   http_port = 8080,                -- THttpServer port
   http_open = true,                -- open the browser after starting THttpServer
   completion = false,              -- opt-in: live-session completion (see below)
+  org_completion = false,         -- opt-in: live-session completion/signature for org `root`
+                                   -- blocks ONLY (see Org babel); independent of completion/signature
   diagnostics = false,             -- opt-in: mark cling errors back onto the sent cell
   inline_eval = false,             -- opt-in: short eval results as virtual text at the line end
   signature = false,               -- opt-in: auto signature help on `(` from the live session (blink);
@@ -121,6 +123,8 @@ Mapping rules: `start/toggle/restart/quit/focus/http` are global; everything els
 
 `#+begin_src root` blocks in [xheisenbugx/org.nvim](https://github.com/xheisenbugx/org.nvim) buffers execute in the running rslime REPL, Emacs ob-lisp style: the REPL is the session, the babel handler is a thin adapter over it. **Experimental** — the design is settled, but the surface is young; the known limits are documented in the module header ([`lua/rslime/babel.lua`](lua/rslime/babel.lua)).
 
+![org babel demo](assets/feat_org_babel.gif)
+
 Wire it up next to org.nvim (one line):
 
 ```lua
@@ -138,6 +142,16 @@ Notes specific to the babel path:
 - Speed is ROOT's, not Neovim's: the prompt takes ~8 ms per character (~0.5 s for a short block, ~8 s for 1 KB)
 - Output is read from the REPL's terminal window, so lines wider than the window come back wrapped; widen the REPL window for long lines
 - A block without `:dir` runs in the REPL's current directory — not necessarily the org file's directory (Emacs defaults to the file's dir; here the REPL's cwd wins)
+
+**Inspect keys and completion inside the org buffer.** With `"org"` in `filetypes`, the inspect mappings work right there on the word under the cursor — `<prefix>e` eval, `<prefix>K` hover, `<prefix>S` signatures, `<prefix>v` vars, `<prefix>d` draw — on the same session the blocks run in. The cell mappings (`cell`, `run_all`, `run_before`, `run_after`) find no `// %%` cells in an org file and just report "no cell".
+
+Completion inside `root` blocks is one switch: `org_completion = true`. It is independent of `completion`/`signature` (those stay off for c/cpp, where clangd is the semantic source) — no clangd attaches to an org buffer, so inside `root` blocks this source is the only semantic completion there is. The gate is the cursor being inside a `root` block (`#+begin_src emacs-lisp` blocks, headings, `#+RESULTS:` lines never trigger it), and like `completion = true` it injects the helper after REPL start:
+
+```lua
+require("rslime").setup({ filetypes = { "c", "cpp", "org" }, org_completion = true, --[[ ... ]] })
+-- blink.cmp: add 'rslime' to the org source list
+per_filetype = { org = { inherit_defaults = true, "rslime", --[[ ... ]] } },
+```
 
 ## Live-session completion (opt-in)
 

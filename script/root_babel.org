@@ -29,6 +29,10 @@ The usual org babel keys (prefix =\ob=):
 - =\obz= (show session) is useless for root blocks: it only knows sessions org.nvim started
   itself, and root blocks run in rslime's REPL window.
 
+With ="org"= added to rslime's =filetypes=, the inspect keys work right here on the word under
+the cursor, on the same session: =<F2>e= eval, =<F2>K= hover, =<F2>S= signatures, =<F2>v= vars
+(see the README's *Org babel* section).
+
 * The simplest block
 
 The default =:results output= takes everything the code printed to the terminal.

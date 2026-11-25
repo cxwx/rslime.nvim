@@ -15,9 +15,19 @@ local KIND_LABEL = { M = "method", D = "member", C = "class", V = "var", F = "fu
 
 function M:new() return setmetatable({}, { __index = M }) end
 
+---org buffers (org babel `root` blocks, see rslime.babel): the cursor has to be inside a root
+---block. A text scan, because an org buffer has no treesitter parser to ask
+---@return boolean
+function M.in_root_block()
+  if vim.bo.filetype ~= "org" then return false end
+  local open = vim.fn.search([[\c^\s*#+begin_src\s\+\S\+]], "bnW") -- nearest #+begin_src above
+  return open > 0 and vim.fn.search([[\c^\s*#+end_src\s*$]], "bnW") < open -- and no #+end_src in between
+    and vim.fn.getline(open):lower():match("^%s*#%+begin_src%s+(%S+)") == "root"
+end
+
 function M:enabled()
   local ft = vim.bo.filetype
-  if ft ~= "cpp" and ft ~= "c" and ft ~= "rootrepl" then return false end
+  if ft ~= "cpp" and ft ~= "c" and ft ~= "rootrepl" and not M.in_root_block() then return false end
   local ok, repl = pcall(require, "rslime.repl")
   return ok and repl.is_running()
 end

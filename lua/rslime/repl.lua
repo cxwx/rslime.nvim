@@ -86,10 +86,10 @@ function M.start()
   -- terminal buffer is finalized and nvim resets 'filetype' during setup
   vim.bo[bufnr].filetype = "rootrepl"
 
-  if #cfg.startup_cmds > 0 or cfg.completion ~= false then
+  if #cfg.startup_cmds > 0 or cfg.completion ~= false or cfg.org_completion then
     vim.defer_fn(function()
       for _, c in ipairs(cfg.startup_cmds) do M.send_raw(c .. "\n") end
-      if cfg.completion ~= false then require("rslime.rpc").inject() end
+      if cfg.completion ~= false or cfg.org_completion then require("rslime.rpc").inject() end
     end, 800)
   end
 end

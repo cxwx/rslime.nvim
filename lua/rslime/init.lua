@@ -14,6 +14,10 @@ local defaults = {
   http_open = true,    -- open the browser after starting THttpServer
   completion = false,  -- off by default: LSP covers most of it; the live source only adds
                        -- REPL-session symbols (objects made interactively, .L, autoload)
+  org_completion = false, -- completion/signature for org `root` blocks ONLY, independent of
+                       -- `completion` (no clangd attaches to org buffers, so there this source
+                       -- is the only semantic completion). On: injects the helper after REPL
+                       -- start (same as completion); c/cpp buffers still follow `completion`
   diagnostics = false, -- mark cling errors from cell sends back onto the source cell
   signature = false,  -- opt-in: auto signature help on `(` from the live session
                        -- (blink signature provider; LSP covers buffer-known symbols)
