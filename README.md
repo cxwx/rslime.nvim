@@ -46,6 +46,7 @@ Neovim plugin dependencies: none.
 
   ![live-session completion](assets/feat_completion.gif)
 - **Clean exit**: the terminal buffer closes itself when the REPL exits; never stuck on `[Process exited 0]`
+- **Org babel** *(experimental, needs [xheisenbugx/org.nvim](https://github.com/xheisenbugx/org.nvim))*: `#+begin_src root` blocks in org files execute in the running rslime REPL — the Emacs ob-lisp shape (SLIME owns the process, the babel handler is a thin adapter). Blocks share the session with everything else; header args `:includes`/`:namespaces`/`:defines`/`:var`/`:dir`, `:results output|value`, named blocks and `#+CALL` work. See [the section below](#org-babel-experimental)
 
 ## Installation
 
@@ -115,6 +116,28 @@ require("rslime").setup({
 ```
 
 Mapping rules: `start/toggle/restart/quit/focus/http` are global; everything else (`cell/line/visual/file/undo/run_all/run_before/run_after/eval/sign/vars/replay/hover/inline_clear/draw/draw_same`) follows `filetypes`: `nil` (default) sets the mappings globally in one shot (no autocmd), while a string or list (`{ "c", "cpp" }`) makes them buffer-local, registered per `FileType`. The prefix alone is mapped to a no-op labeled `rslime` so which-key pops the group open (an action with a `""` suffix overrides it). Set any suffix to `false` to disable it. `short_desc = true` swaps the verbose which-key labels for compact `"󰖯 before"`-style ones (Nerd Font required).
+
+## Org babel (experimental)
+
+`#+begin_src root` blocks in [xheisenbugx/org.nvim](https://github.com/xheisenbugx/org.nvim) buffers execute in the running rslime REPL, Emacs ob-lisp style: the REPL is the session, the babel handler is a thin adapter over it. **Experimental** — the design is settled, but the surface is young; the known limits are documented in the module header ([`lua/rslime/babel.lua`](lua/rslime/babel.lua)).
+
+Wire it up next to org.nvim (one line):
+
+```lua
+require("org").setup({ --[[ your org.nvim config, incl. babel.languages.root ]] })
+require("rslime.babel").setup({ timeout = 30000 }) -- ms, per sent line, ROOT startup included
+```
+
+`require("rslime.babel")` loads rslime.nvim on demand (lazy.nvim intercepts `require`, same trick as `module = "rslime.blink"` above), so it works with any lazy-loading style. org.nvim also needs the language registered in its babel config (`babel.languages.root`, see the example below). Blocks use the org babel keys: `\obe` runs the block under the cursor (starting the REPL if needed), `\obb` runs the whole file, `\obv` shows the expanded code. Invalid code (unclosed brackets, a string spanning lines, a last line ending with `else`, …) is refused *before* anything is sent — nothing half-done is left in the REPL.
+
+A complete, commented example org file — the how-to steps are written inside it, and every result in it was produced by actually running `\obb` on a live ROOT: [`script/root_babel.org`](script/root_babel.org).
+
+Notes specific to the babel path:
+
+- Execution is **synchronous**: while a block runs, Neovim blocks (Emacs' slime-eval does the same). Async would mean org.nvim owning a separate process, not *rslime's* REPL — details in the module header's FUTURE notes
+- Speed is ROOT's, not Neovim's: the prompt takes ~8 ms per character (~0.5 s for a short block, ~8 s for 1 KB)
+- Output is read from the REPL's terminal window, so lines wider than the window come back wrapped; widen the REPL window for long lines
+- A block without `:dir` runs in the REPL's current directory — not necessarily the org file's directory (Emacs defaults to the file's dir; here the REPL's cwd wins)
 
 ## Live-session completion (opt-in)
 
@@ -225,7 +248,7 @@ h->Draw();
 
 Open a c/cpp file → start the REPL → put the cursor inside a cell and hit the send key; run all executes every block in order; after a kernel restart, resend the "create" cell to start over.
 
-See [`script/test.cpp`](script/test.cpp) for cells covering THttpServer, undo and restart testing.
+See [`script/test.cpp`](script/test.cpp) for cells covering THttpServer, undo and restart testing, and [`script/root_babel.org`](script/root_babel.org) for the experimental org babel example (run it with `\obb`).
 
 ## Roadmap
 

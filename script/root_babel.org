@@ -1,0 +1,188 @@
+#+TITLE:     org babel root example: run C++ in ROOT from an org file
+#+STARTUP:   showall
+
+* How to use
+
+1. Open this file, put the cursor inside any =root= src block (in the code or on the =#+begin_src=
+   line), hit =\obe=.
+2. The first execution starts rslime's ROOT REPL automatically (the same session as the start key
+   in a cpp file); a terminal window opens below. ROOT takes a second or so to start.
+3. The result lands below the block (=#+RESULTS:=); running it again overwrites it.
+4. The session is continuous: variables defined in a block stay in the REPL and the next block
+   uses them; things typed by hand in the REPL window are usable in blocks too.
+5. To start over: type =.q= in the REPL, and the next block automatically starts a fresh ROOT.
+
+The usual org babel keys (prefix =\ob=):
+
+| key             | what it does                                        |
+|-----------------+-----------------------------------------------------|
+| =\obe=          | execute the block under the cursor                  |
+| =\obb=          | execute every block in the file (stops at an invalid one) |
+| =\obs=          | execute the blocks in the current section           |
+| =\obn=, =\obp=  | next / previous src block                           |
+| =\obv=          | see the code actually sent (after :includes :var expansion) |
+| =\obI=          | see the block's header args                         |
+| =\obk=          | delete the block's result                           |
+
+- While a block runs, Neovim blocks until it finishes (same as Emacs' slime-eval); =\obC=
+  (cancel) cannot be pressed during that.
+- =\obz= (show session) is useless for root blocks: it only knows sessions org.nvim started
+  itself, and root blocks run in rslime's REPL window.
+
+* The simplest block
+
+The default =:results output= takes everything the code printed to the terminal.
+
+#+begin_src root
+  printf("hello from ROOT %s\n", gROOT->GetVersion());
+#+end_src
+
+#+RESULTS:
+: hello from ROOT 6.43.01
+
+* Blocks share one session
+
+#+name: fill_h
+#+begin_src root
+  gRandom->SetSeed(42); // fixed seed: every run gives the same numbers
+  TH1F h("h", "my histogram", 100, 0, 10);
+  for (int i = 0; i < 10000; ++i) h.Fill(gRandom->Gaus(5, 2));
+  printf("entries = %g\n", h.GetEntries());
+#+end_src
+
+#+RESULTS: fill_h
+: entries = 10000
+
+=h= is still in the session, this block just uses it:
+
+#+begin_src root
+  printf("mean = %.3f, stddev = %.3f\n", h.GetMean(), h.GetStdDev());
+#+end_src
+
+#+RESULTS:
+: mean = 4.993, stddev = 1.927
+
+* Only the last value
+
+=:results value= takes the value of the last expression, with the type prefix (=double=)
+stripped.
+
+#+begin_src root :results value
+  h.GetMean()
+#+end_src
+
+#+RESULTS:
+: 4.9933446
+
+* Header args
+
+#+begin_src root :includes <bitset> :namespaces ROOT::Math :var who="world" :defines ANSWER 42
+  cout << "hello, " << who << ", answer = " << bitset<8>(ANSWER) << endl;
+  printf("pi = %.5f\n", Pi());
+#+end_src
+
+#+RESULTS:
+: hello, world, answer = 00101010
+: pi = 3.14159
+
+=:var= becomes a C++ definition (=\obv= shows the expansion): =n=3= is =int=, =x=2.5= is
+=double=, =s="hi"= is =const char*=, ='(10 20 30)= is =int v[3]=, an org table is a 2D array.
+
+#+begin_src root :var n=3 :var x=2.5 :var s="hi" :var v='(10 20 30)
+  printf("n = %d, x = %.1f, s = %s, v[2] = %d\n", n, x, s, v[2]);
+#+end_src
+
+#+RESULTS:
+: n = 3, x = 2.5, s = hi, v[2] = 30
+
+=:dir= changes the REPL's current directory and leaves it there (later blocks run in it too). A
+block without =:dir= runs in the REPL's current directory: Neovim's cwd when the REPL started,
+or whatever the last =:dir= left behind.
+
+#+begin_src root :dir "/tmp"
+  printf("now in %s\n", gSystem->BaseName(gSystem->pwd()));
+#+end_src
+
+#+RESULTS:
+: now in tmp
+
+# "." is the directory this org file lives in
+
+#+begin_src root :dir "."
+  printf("now in %s\n", gSystem->BaseName(gSystem->pwd()));
+#+end_src
+
+#+RESULTS:
+: now in script
+
+* Named blocks and #+CALL
+
+#+name: gauss
+#+begin_src root :var x=0.0 :var mu=0.0 :var sigma=1.0 :results value
+  TMath::Gaus(x, mu, sigma)
+#+end_src
+
+#+RESULTS: gauss
+: 1.0000000
+
+#+CALL: gauss(x=1, mu=0, sigma=1)
+
+#+RESULTS:
+: 0.60653066
+
+#+CALL: gauss(x=0, mu=0, sigma=2)
+
+#+RESULTS:
+: 1.0000000
+
+* When things go wrong
+
+A compile error: the code is still sent, Cling's error output goes into =#+RESULTS:= plus a
+one-line warning ("root: N errors"). The REPL stays usable.
+
+#+begin_src root
+  printf("%d\n", nosuch_variable);
+#+end_src
+
+#+RESULTS:
+: input_line_70:2:18: error: use of undeclared identifier 'nosuch_variable'
+:  (printf("%d\n", nosuch_variable))
+:                  ^~~~~~~~~~~~~~~
+: Error in <HandleInterpreterException>: Error evaluating expression (printf("%d\
+: n", nosuch_variable))
+: Execution of your code was aborted.
+
+Invalid code is not sent at all — just a one-line message, =#+RESULTS: stays untouched (try
+=\obe= on the two blocks below). Unclosed brackets / quotes / block comments, a string literal
+spanning lines (Cling's prompt won't take it — it sits on the continuation line and never
+executes), a raw string spanning lines, the last line ending with a backslash or with =else=:
+all of these. =\obb= stops at such a block.
+
+#+begin_src root
+  if (h.GetMean() > 4) {
+    printf("unbalanced\n");
+#+end_src
+
+#+begin_src root
+  printf("a string
+          across lines\n");
+#+end_src
+
+* Notes
+
+- Speed: ROOT's prompt takes ~8 ms per character, so a block costs about 8 ms x characters
+  (short blocks ~0.5 s, 1 KB ~8 s). That is ROOT's own overhead; piping into root doesn't have
+  it.
+- Output is read from the REPL's terminal window: lines wider than the window are wrapped, and
+  =#+RESULTS:= shows them wrapped. Widen the REPL window for unwrapped long lines.
+- Blank lines in the code are not sent, tabs become spaces; trailing blank lines of the output
+  are dropped; results of 10 lines and up are wrapped in =#+begin_example=.
+- While the REPL sits on the continuation prompt (previous input incomplete), blocks refuse to
+  run: finish it in the REPL, or type =.@= to cancel.
+- Statements reading the keyboard (cin / scanf / getchar) time out with an error; the code's
+  state stays in the REPL.
+- A =.q= in the code makes ROOT exit: that block errors, the next one starts a fresh ROOT.
+- Slow statements need a bigger timeout: =require("rslime.babel").setup({ timeout = 30000 })=
+  (ms, per line).
+- This is an EXPERIMENTAL feature. The implementation is =lua/rslime/babel.lua=; its header has
+  the full notes and known limits.
